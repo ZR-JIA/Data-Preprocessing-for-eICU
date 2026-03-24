@@ -1,0 +1,37 @@
+# config/obs_cleaning.yaml
+paths:
+  # Adjust to your own layout
+  project_root: "ProjectStroke"
+  input_raw: "inputs/Observative"
+  output_clean: "outputs/obs_cleaned.csv"
+  log_dir: "ProjectStroke/logs"
+
+time_window_hours: 72  # fixed observation window
+
+tables:
+  # Added: site_id, ethnicity, height, weight
+  # hospitaldischargestatus is required to build the label and is dropped afterwards
+  patient: 
+    - "patientunitstayid"
+    - "age"
+    - "gender"
+    - "ethnicity"           # left tower
+    - "hospitalid"          # left tower
+    - "admissionheight"     # right tower, numeric
+    - "admissionweight"     # right tower, numeric
+    - "hospitaldischargestatus" # required to build mortality
+    - "unitadmitoffset"
+
+  diagnosis: ["patientunitstayid", "icd9code", "diagnosisstring"]
+  
+  # Vitals and labs unchanged unless more measurements are wanted
+  vitalPeriodic: ["patientunitstayid", "observationoffset", "heartrate", "map", "spo2", "temperature"]
+  lab: ["patientunitstayid", "labname", "labresult", "labresultoffset"]
+  
+qc:
+  missing_threshold: 0.7
+  outlier_limits:
+    heartrate: [20, 220]
+    map: [30, 160]
+    spo2: [50, 100]
+    temperature: [32, 42]

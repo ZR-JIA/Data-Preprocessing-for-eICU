@@ -1,0 +1,41 @@
+# Raw data - never commit eICU data (PhysioNet license)
+Input/
+outputs/
+train_ready/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environments
+.env
+.venv
+env/
+venv/
+*.conda
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Pickle / model artifacts
+*.pkl
+*.pickle

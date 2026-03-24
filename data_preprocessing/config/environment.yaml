@@ -1,0 +1,21 @@
+name: Preprocessing
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  # Base Python environment
+  - python=3.10
+  - pip
+
+  # Installed via pip for faster-moving packages
+  - pip:
+    # --- Core data handling ---
+    - pandas>=2.0.0      # main dataframe engine
+    - numpy>=1.24        # numerics
+    - polars>=0.20.0     # fallback engine when pandas runs out of memory
+    
+    # --- Tooling ---
+    - pyyaml>=6.0        # reads the YAML configs
+    - tqdm>=4.66         # progress bars on long loops
+    - pyarrow>=14.0      # faster CSV/Parquet IO
+    - openpyxl           # only needed to read Excel data dictionaries
