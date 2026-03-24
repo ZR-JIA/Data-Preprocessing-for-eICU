@@ -1,0 +1,37 @@
+# config/obs_cleaning.yaml
+paths:
+  # 请根据你的实际路径修改
+  project_root: "ProjectStroke"
+  input_raw: "inputs/Observative"
+  output_clean: "outputs/obs_cleaned.csv"
+  log_dir: "ProjectStroke/logs"
+
+time_window_hours: 72  # 保持 72 小时不变
+
+tables:
+  # ⚠️ 修改点：增加了 site_id, ethnicity, height, weight
+  # hospitaldischargestatus 必须保留，用来生成 Label，清洗时会被删掉
+  patient: 
+    - "patientunitstayid"
+    - "age"
+    - "gender"
+    - "ethnicity"           # <--- 新增：双塔-左塔特征
+    - "hospitalid"          # <--- 新增：双塔-左塔特征
+    - "admissionheight"     # <--- 新增：双塔-右塔数值特征
+    - "admissionweight"     # <--- 新增：双塔-右塔数值特征
+    - "hospitaldischargestatus" # 必须保留用于生成 mortality
+    - "unitadmitoffset"
+
+  diagnosis: ["patientunitstayid", "icd9code", "diagnosisstring"]
+  
+  # Vital 和 Lab 保持不变 (除非你想加更多指标)
+  vitalPeriodic: ["patientunitstayid", "observationoffset", "heartrate", "map", "spo2", "temperature"]
+  lab: ["patientunitstayid", "labname", "labresult", "labresultoffset"]
+  
+qc:
+  missing_threshold: 0.7
+  outlier_limits:
+    heartrate: [20, 220]
+    map: [30, 160]
+    spo2: [50, 100]
+    temperature: [32, 42]

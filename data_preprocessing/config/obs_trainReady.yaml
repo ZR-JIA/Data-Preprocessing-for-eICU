@@ -1,0 +1,13 @@
+# config/obs_trainReady.yaml
+paths:
+  # 必须指向 obs_cleaned.csv (建议用绝对路径或正确的相对路径)
+  input_cleaned: "outputs/obs_cleaned.csv" 
+  output_train_ready: "train_ready"
+
+random_seed: 42
+n_seeds: 5
+
+# 预处理相关
+target_col: "mortality"
+impute_strategy: "median"
+scale_method: "standard"

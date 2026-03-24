@@ -1,0 +1,21 @@
+name: Preprocessing
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  # 基础 Python 环境
+  - python=3.10
+  - pip
+
+  # Pip 安装包 (更灵活，更新更快)
+  - pip:
+    # --- 核心数据处理 ---
+    - pandas>=2.0.0      # 数据处理主力
+    - numpy>=1.24        # 数值计算
+    - polars>=0.20.0     # 【备用】高性能处理库，如果 Pandas 爆内存就用它
+    
+    # --- 辅助工具 ---
+    - pyyaml>=6.0        # 读取你的 config.yaml
+    - tqdm>=4.66         # 进度条 (跑大循环时很有用)
+    - pyarrow>=14.0      # 加速 Pandas 读取 CSV/Parquet
+    - openpyxl           # 如果你需要读写 Excel 数据字典
