@@ -1,5 +1,9 @@
 # eICU Stroke Data Preprocessing
 
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange)](https://pytorch.org/)
+
 Data preprocessing pipeline for the paper:
 **[Dual-Tower Transformer for ICU Stroke Mortality Prediction](https://github.com/ZR-JIA/Dual-Tower-Transformer-eICU-Stroke)**
 
