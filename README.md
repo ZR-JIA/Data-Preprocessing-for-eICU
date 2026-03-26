@@ -129,3 +129,38 @@ data_preprocessing/
 ## Citation
 
 If you use this pipeline, please cite the paper (link above). BibTeX will be added once the proceedings are published.
+
+## Paper
+
+> **Deep Learning for Stroke Mortality Prediction in eICU: A Dual-Tower Transformer Framework**
+>
+> Zhengrong Jia\* (Asia AI Education and Future Technology Association, Shenzhen, China)
+> Kwong-Cheong Wong\* (School of Governance and Policy Science, The Chinese University of Hong Kong, Hong Kong SAR, China)
+>
+> \*Corresponding authors
+>
+> 📄 **[Paper Link](https://drive.google.com/file/d/1yl0XyzkV9QuHWtkpBu8RyXFypU3Ptb8b/view)**
+
+If you find this work useful, please cite:
+
+```bibtex
+@inproceedings{Jia2026DualTower,
+  title     = {Deep Learning for Stroke Mortality Prediction in eICU: A Dual-Tower Transformer Framework},
+  author    = {Jia, Zhengrong and Wong, Kwong-Cheong},
+  booktitle = {Proceedings of the CCAI Conference},
+  year      = {2026},
+  note      = {Accepted}
+}
+```
+
+---
+
+## Acknowledgment
+
+We would like to express our gratitude to the eICU Collaborative Research Database team for making the multi-center critical care data publicly available, which was essential for this study. We also thank the Macau University of Science and Technology for providing access to the academic databases and literature resources that supported this research.
+
+---
+
+## License
+
+This project is licensed under the [Creative Commons Attribution-NonCommercial 4.0 International License](https://creativecommons.org/licenses/by-nc/4.0/). See the [LICENSE](LICENSE) file for full terms, including the Medical AI Disclaimer.
