@@ -138,7 +138,7 @@ If you use this pipeline, please cite the paper (link above). BibTeX will be add
 
 > **Deep Learning for Stroke Mortality Prediction in eICU: A Dual-Tower Transformer Framework**
 >
-> Zhengrong Jia\* (Asia AI Education and Future Technology Association, Shenzhen, China)
+> Zhengrong Jia\* (Asia AI Education and Future Technology Association, Hong Kong SAR, China)
 > Kwong-Cheong Wong\* (School of Governance and Policy Science, The Chinese University of Hong Kong, Hong Kong SAR, China)
 >
 > \*Corresponding authors
