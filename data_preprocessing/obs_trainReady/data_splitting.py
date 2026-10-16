@@ -235,9 +235,11 @@ class SiteHoldoutSplitter:
         val_size: float = 0.2,
         stratify_col: str = 'mortality',
         test_sites: Optional[List] = None,
+        group_col: str = 'patient_id',
         random_state: int = 42
     ):
         self.site_col = site_col
+        self.group_col = group_col
         self.test_size = test_size
         self.val_size = val_size
         self.stratify_col = stratify_col
@@ -275,14 +277,27 @@ class SiteHoldoutSplitter:
         test_df = df[df[self.site_col].isin(self.test_sites)].copy()
         train_val_df = df[~df[self.site_col].isin(self.test_sites)].copy()
         
-        # Carve val out of train_val, stratified
+        # Carve val out of train_val, stratified and grouped by patient.
+        # This split used to run on rows, so a patient with two stays inside
+        # the training hospitals could land in both train and val, which is the
+        # same defect the patient-level protocol exists to avoid
+        # (AUDIT.md R-5, EICU-02).
         if len(train_val_df) > 0 and self.val_size > 0:
-            train_df, val_df = train_test_split(
-                train_val_df,
+            groups = train_val_df.groupby(self.group_col).agg(
+                {self.stratify_col: 'first'}
+            ).reset_index()
+            train_groups, val_groups = train_test_split(
+                groups,
                 test_size=self.val_size,
-                stratify=train_val_df[self.stratify_col],
+                stratify=groups[self.stratify_col],
                 random_state=self.random_state
             )
+            train_df = train_val_df[
+                train_val_df[self.group_col].isin(train_groups[self.group_col])
+            ].copy()
+            val_df = train_val_df[
+                train_val_df[self.group_col].isin(val_groups[self.group_col])
+            ].copy()
         else:
             train_df = train_val_df
             val_df = pd.DataFrame()
@@ -319,12 +334,18 @@ class SiteHoldoutSplitter:
         site_list = site_counts.index.tolist()
         np.random.shuffle(site_list)
         
+        # Test the budget before adding, and skip a hospital that would take
+        # the total further from the target than stopping would. The previous
+        # loop appended first and checked afterwards, so it could overshoot by
+        # a whole hospital (AUDIT.md R-5).
         for site in site_list:
-            if cumsum < target_samples:
-                selected_sites.append(site)
-                cumsum += site_counts[site]
-            else:
+            if cumsum >= target_samples:
                 break
+            n = site_counts[site]
+            if selected_sites and abs(cumsum + n - target_samples) > abs(cumsum - target_samples):
+                continue
+            selected_sites.append(site)
+            cumsum += n
         
         # Always keep at least one site
         if len(selected_sites) == 0:

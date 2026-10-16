@@ -85,7 +85,10 @@ class TrainReadyExporter:
         for split_name, indices in split_indices.items():
             if len(indices) == 0: continue
             
-            ids = patient_ids.iloc[indices].values
+            # split_indices holds index *labels*, so they must be read with
+            # .loc. Reading them with .iloc was correct only while the frame
+            # happened to carry a clean RangeIndex (AUDIT.md R-4).
+            ids = patient_ids.loc[indices].values
             df_ids = pd.DataFrame({'patient_id': ids, 'original_index': indices})
             df_ids.to_csv(protocol_dir / f"{split_name}_ids.csv", index=False)
 

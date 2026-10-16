@@ -40,6 +40,10 @@ from obs_trainReady.utils import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Reserved index for categories absent from the training split.
+UNKNOWN_CATEGORY = "<UNK>"
+
+
 
 class ObsTrainReadyPipeline:
     """
@@ -116,13 +120,19 @@ class ObsTrainReadyPipeline:
         Everything is fitted on train only and applied to val/test.
         """
         logger.info("Starting dual-tower preprocessing (fit on train)...")
+        encoders = {}
         
         target_col = 'mortality'
         exclude_cols = ['patient_id', 'patientunitstayid', 'uniquepid',
-                        'admission_time', '_group_key', target_col]
+                        'site_id', 'admission_time', '_group_key', target_col]
         
-        # 1. Left tower: categorical features, encoded to 0, 1, 2 ... indices
-        cat_cols = ['age', 'gender', 'ethnicity', 'site_id']
+        # 1. Left tower: categorical features, encoded to 0, 1, 2 ... indices.
+        # The paper's left tower has three: Age (16-d), Gender (2-d) and
+        # Ethnicity (4-d), concatenated to h_cat in R^22. site_id used to be a
+        # fourth, which cannot produce 22 dimensions, so it is no longer a
+        # model feature -- it stays on the frame only so the site protocol can
+        # split on it (AUDIT.md EICU-10).
+        cat_cols = ['age', 'gender', 'ethnicity']
         # Keep only the ones that exist
         cat_cols = [c for c in cat_cols if c in train_df.columns]
         
@@ -143,24 +153,27 @@ class ObsTrainReadyPipeline:
             X_val_cat[col] = X_val_cat[col].fillna('Unknown').astype(str)
             X_test_cat[col] = X_test_cat[col].fillna('Unknown').astype(str)
             
-            # Fit the encoder
+            # Fit on the training split, plus a reserved slot for categories
+            # that only appear later. Previously an unseen value was folded
+            # into encoder.classes_[0] -- a real hospital or ethnicity -- which
+            # silently merged two different things (AUDIT.md EICU-10).
             le = LabelEncoder()
-            # on the training split only
-            le.fit(X_train_cat[col])
-            
-            # Transform, tolerating categories unseen during fit
-            def safe_transform(encoder, series):
-                # Unseen categories are mapped to the first known class.
-                # A reserved <UNK> index would be stricter.
-                import numpy as np
-                valid_classes = set(encoder.classes_)
-                # Replace anything not seen in training
-                safe_series = series.apply(lambda x: x if x in valid_classes else encoder.classes_[0])
-                return encoder.transform(safe_series)
+            le.fit(list(X_train_cat[col].unique()) + [UNKNOWN_CATEGORY])
 
-            X_train_cat[col] = le.transform(X_train_cat[col])
+            def safe_transform(encoder, series):
+                known = set(encoder.classes_)
+                return encoder.transform(
+                    series.where(series.isin(known), UNKNOWN_CATEGORY)
+                )
+
+            X_train_cat[col] = safe_transform(le, X_train_cat[col])
+            n_unseen = (~X_val_cat[col].isin(set(le.classes_))).sum() + \
+                       (~X_test_cat[col].isin(set(le.classes_))).sum()
+            if n_unseen:
+                logger.info(f"  {col}: {n_unseen} value(s) unseen in train -> {UNKNOWN_CATEGORY}")
             X_val_cat[col] = safe_transform(le, X_val_cat[col])
             X_test_cat[col] = safe_transform(le, X_test_cat[col])
+            encoders[col] = le
             
         # --- Right tower: impute + scale ---
         # 1. Median imputation
@@ -197,6 +210,9 @@ class ObsTrainReadyPipeline:
         val_pack = merge_pack(X_val_cat, X_val_num, val_df)
         test_pack = merge_pack(X_test_cat, X_test_num, test_df)
         
+        self._fitted = {"encoders": encoders, "imputer": imputer,
+                        "scaler": scaler, "cat_cols": cat_cols,
+                        "num_cols": num_cols}
         return train_pack, val_pack, test_pack
 
     def run_protocol(self, protocol_name: str, df: pd.DataFrame, seed: int):
