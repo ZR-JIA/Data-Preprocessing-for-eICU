@@ -31,6 +31,7 @@ __all__ = [
     'SeedManager',
     'DataVersionManager',
     'TrainReadyExporter',
-    'compute_data_hash'
+    'ExperimentTracker',
+    'ResultsExporter',
 ]
 

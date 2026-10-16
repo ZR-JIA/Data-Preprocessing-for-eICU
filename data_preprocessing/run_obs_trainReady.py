@@ -29,6 +29,7 @@ from obs_trainReady import (
     SiteHoldoutSplitter,
     SeedManager,
     TrainReadyExporter,
+    DataVersionManager,
 )
 from obs_trainReady.utils import (
     load_config,
@@ -226,8 +227,8 @@ class ObsTrainReadyPipeline:
         if protocol_name == 'patient_level':
             splitter = PatientLevelSplitter(stratify_col='mortality', random_state=seed)
         elif protocol_name == 'temporal':
-             # Only possible when the data carries admission_time
-             if 'admission_time' not in df.columns:
+             # Only possible when a time axis survived stage 1
+             if 'hospitaldischargeyear' not in df.columns:
                  logger.warning("Skipping temporal split: no time column")
                  return
              splitter = TemporalHoldoutSplitter(stratify_col='mortality', random_state=seed)
@@ -240,9 +241,10 @@ class ObsTrainReadyPipeline:
         
         # Persist split membership
         self.exporter.save_split_indices(
-            protocol=protocol_std, 
-            split_indices=splitter.split_indices, 
-            patient_ids=df['patient_id']
+            protocol=protocol_std,
+            split_indices=splitter.split_indices,
+            patient_ids=df['patient_id'],
+            seed=seed,
         )
         
         # 2. Preprocess for the dual-tower model
@@ -255,7 +257,17 @@ class ObsTrainReadyPipeline:
             protocol=protocol_std,
             train_df=train_ready,
             val_df=val_ready,
-            test_df=test_ready
+            test_df=test_ready,
+            seed=seed,
+        )
+
+        # Without these the run cannot be reproduced from what it writes
+        # (AUDIT.md EICU-14).
+        self.exporter.save_fitted_transforms(protocol_std, seed, self._fitted)
+        self.exporter.save_feature_list(
+            feature_names=self._fitted['cat_cols'] + self._fitted['num_cols'],
+            feature_types={'numeric': self._fitted['num_cols'],
+                           'categorical': self._fitted['cat_cols']},
         )
         logger.info(f"Protocol {protocol_std} complete. Data written to PACKS/{protocol_std}/")
 
@@ -264,18 +276,29 @@ class ObsTrainReadyPipeline:
         # Load
         df = self.load_data()
         
-        # Run the protocols
-        # 1. Patient level (the primary protocol)
-        self.run_protocol('patient_level', df, seed=42)
-        
-        # 2. Site split (optional, tests cross-hospital generalisation)
-        #if 'site_id' in df.columns:
-        #    self.run_protocol('site', df, seed=42)
-            
-        # 3. Temporal split (optional)
-        #if 'admission_time' in df.columns:
-        #    self.run_protocol('temporal', df, seed=42)
-            
+        seeds = self.seed_manager.get_seeds()
+        logger.info(f"Seeds: {seeds}")
+
+        # The paper reports results averaged over 5 random seeds, but run()
+        # used to hardcode seed=42 and produce exactly one split, so n_seeds
+        # had no effect (AUDIT.md EICU-14). Every configured seed now runs.
+        for seed in seeds:
+            # 1. Patient level (the primary protocol)
+            self.run_protocol('patient_level', df, seed=seed)
+
+            # 2. Site split: cross-hospital generalisation
+            if df['site_id'].nunique() > 1:
+                self.run_protocol('site', df, seed=seed)
+
+            # 3. Temporal split: only possible when a time axis survived
+            # stage 1. eICU exposes hospitaldischargeyear and nothing finer.
+            if 'hospitaldischargeyear' in df.columns:
+                self.run_protocol('temporal', df, seed=seed)
+
+        self.exporter.save_seeds(seeds)
+        self.exporter.save_data_version(
+            df, data_hash=DataVersionManager.compute_data_hash(df), config=self.config
+        )
         logger.info("\nAll train-ready data prepared.")
 
 def main():

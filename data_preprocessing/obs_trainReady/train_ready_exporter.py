@@ -5,6 +5,7 @@ Responsible only for persisting data (CSV) and metadata (JSON).
 
 import os
 import json
+import pickle
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -79,9 +80,17 @@ class TrainReadyExporter:
 
     # ========== SPLITS ==========
     
-    def save_split_indices(self, protocol: str, split_indices: Dict[str, List], patient_ids: pd.Series):
+    def _protocol_dir(self, kind: str, protocol: str, seed=None) -> Path:
+        d = self.base_dir / kind / protocol
+        if seed is not None:
+            d = d / f"seed_{seed}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def save_split_indices(self, protocol: str, split_indices: Dict[str, List],
+                           patient_ids: pd.Series, seed=None):
         """Write split membership as IDs."""
-        protocol_dir = self.base_dir / "SPLITS" / protocol
+        protocol_dir = self._protocol_dir("SPLITS", protocol, seed)
         for split_name, indices in split_indices.items():
             if len(indices) == 0: continue
             
@@ -94,13 +103,27 @@ class TrainReadyExporter:
 
     # ========== PACKS (the actual datasets) ==========
     
-    def save_split_data(self, protocol: str, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame):
+    def save_split_data(self, protocol: str, train_df: pd.DataFrame, val_df: pd.DataFrame,
+                        test_df: pd.DataFrame, seed=None):
         """Write train/val/test CSVs."""
-        protocol_dir = self.base_dir / "PACKS" / protocol
+        protocol_dir = self._protocol_dir("PACKS", protocol, seed)
         train_df.to_csv(protocol_dir / "train.csv", index=False)
         val_df.to_csv(protocol_dir / "val.csv", index=False)
         test_df.to_csv(protocol_dir / "test.csv", index=False)
         logger.info(f"Wrote data pack: {protocol_dir}")
+
+    def save_fitted_transforms(self, protocol: str, seed, fitted: Dict[str, Any]):
+        """
+        Persist the encoders, imputer and scaler.
+
+        They used to be local variables, discarded when the function returned,
+        so the fitted transform could never be reapplied to new data and a run
+        could not be reproduced from what it wrote (AUDIT.md EICU-14).
+        """
+        out = self._protocol_dir("PACKS", protocol, seed) / "transforms.pkl"
+        with open(out, "wb") as f:
+            pickle.dump(fitted, f)
+        logger.info(f"Fitted transforms saved: {out}")
 
     # ========== REPROD ==========
     

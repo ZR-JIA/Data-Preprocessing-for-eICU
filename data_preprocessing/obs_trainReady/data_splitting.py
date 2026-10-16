@@ -129,7 +129,7 @@ class TemporalHoldoutSplitter:
     
     def __init__(
         self,
-        time_col: str = 'admission_time',
+        time_col: str = 'hospitaldischargeyear',
         test_size: float = 0.2,
         val_size: float = 0.2,  # fraction of train+val held out as val
         stratify_col: str = 'mortality',
@@ -161,9 +161,13 @@ class TemporalHoldoutSplitter:
         if self.time_col not in df.columns:
             raise ValueError(f"missing time column: {self.time_col}")
         
-        # Parse to datetime
+        # eICU is de-identified and exposes no absolute timestamp, only
+        # hospitaldischargeyear. Order on whatever the column holds: parse
+        # dates when they are dates, otherwise sort the values as they are
+        # (AUDIT.md EICU-13).
         df = df.copy()
-        df[self.time_col] = pd.to_datetime(df[self.time_col])
+        if not pd.api.types.is_numeric_dtype(df[self.time_col]):
+            df[self.time_col] = pd.to_datetime(df[self.time_col], errors='coerce')
         
         # One row per group, using its earliest time
         df['_group_key'] = df[self.group_cols].astype(str).agg('_'.join, axis=1)

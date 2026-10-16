@@ -31,7 +31,7 @@ DEFAULT_TABLES = {
     "patient": [
         "patientunitstayid", "uniquepid", "age", "gender", "ethnicity", "hospitalid",
         "admissionheight", "admissionweight", "hospitaldischargestatus",
-        "unitadmitoffset", "unitdischargeoffset",
+        "unitadmitoffset", "unitdischargeoffset", "hospitaldischargeyear",
     ],
     "diagnosis": ["patientunitstayid", "icd9code", "diagnosisstring",
                   "diagnosisoffset"],
@@ -187,6 +187,7 @@ def main():
         "admissionheight",  # numeric
         "admissionweight",  # numeric
         "site_id",          # categorical, from hospitalid
+        "hospitaldischargeyear",  # time axis for the temporal protocol
         "mortality"         # target
     ]
     
@@ -200,8 +201,9 @@ def main():
     #    how='left' keeps only patients in the cohort.
     merged = demo.join(agg, how="left")
     
-    # 5. Drop noise columns.
-    #    'admission_time' has ~1460 distinct values: a raw timestamp, not a feature.
+    # 5. Drop noise columns. eICU is de-identified and carries no absolute
+    #    timestamp, so 'admission_time' never existed here; the temporal
+    #    protocol uses hospitaldischargeyear instead (AUDIT.md EICU-13).
     if 'admission_time' in merged.columns:
         print("  Removing noise column: 'admission_time'...")
         merged = merged.drop(columns=['admission_time'])

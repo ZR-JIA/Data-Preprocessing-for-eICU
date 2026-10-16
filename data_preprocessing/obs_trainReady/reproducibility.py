@@ -29,7 +29,14 @@ class SeedManager:
             n_seeds: how many seeds to derive (5 or more)
         """
         self.base_seed = base_seed
+        # Five is the floor, because the paper reports results averaged over
+        # five seeds. Raising a smaller request used to happen in silence,
+        # which is another way for the config to disagree with what runs.
         self.n_seeds = max(n_seeds, 5)
+        if self.n_seeds != n_seeds:
+            logger.warning(
+                "n_seeds=%d was raised to the minimum of %d.", n_seeds, self.n_seeds
+            )
         self.seed_list = self._generate_seeds()
         
     def _generate_seeds(self) -> List[int]:
