@@ -21,7 +21,12 @@ the paper it accompanies is final. That is why there are three branches.
 |---|---|---|
 | **`main`** | The state corresponding to publication. Tagged `ccai2026-published`. | You want to see what produced the published numbers. |
 | **`fix`** | Corrections to the defects found in audit. | You want to build on this work, or run the pipeline yourself. |
-| **`mmda_enhance`** | Methodological additions that deliberately depart from the paper's feature schema. | You want the missing-data treatment described there. |
+| **`mmda_enhance`** | Methodological additions that deliberately depart from the paper's feature schema. See **[MMDA.md](MMDA.md)**. | You want the missing-data treatment. |
+
+> **You are on `mmda_enhance`.** It builds on `fix` and adds missingness
+> indicators, which change the feature count on purpose. [MMDA.md](MMDA.md)
+> explains what changes and what it costs; set `missingness.indicators: false`
+> to get `fix`'s behaviour back.
 
 `main` carries known defects, on purpose. They are catalogued in
 **[AUDIT.md](AUDIT.md)**, each with its evidence and its status, and the

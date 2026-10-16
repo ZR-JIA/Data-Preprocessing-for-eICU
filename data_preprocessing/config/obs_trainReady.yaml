@@ -11,3 +11,12 @@ n_seeds: 5
 target_col: "mortality"
 impute_strategy: "median"
 scale_method: "standard"
+# Missing-data treatment (AUDIT.md EICU-09).
+# Enabling indicators adds one binary feature per qualifying numeric column, so
+# the feature count no longer matches the paper's 94 + 3 = 97. That departure
+# is the point of the mmda_enhance branch; see MMDA.md.
+missingness:
+  indicators: true
+  min_rate: 0.01        # below this there is nothing to learn from
+  max_rate: 0.95        # above this the indicator is near-constant
+  report_by: ["site_id", "mortality"]

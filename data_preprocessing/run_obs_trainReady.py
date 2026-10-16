@@ -30,6 +30,8 @@ from obs_trainReady import (
     SeedManager,
     TrainReadyExporter,
     DataVersionManager,
+    MissingnessIndicators,
+    missingness_report,
 )
 from obs_trainReady.utils import (
     load_config,
@@ -176,6 +178,23 @@ class ObsTrainReadyPipeline:
             X_test_cat[col] = safe_transform(le, X_test_cat[col])
             encoders[col] = le
             
+        # --- Missingness, recorded before it is filled in ---
+        # Whether a lab was drawn reflects clinical suspicion and which
+        # interfaces a hospital deployed, so the gap itself carries signal that
+        # median imputation erases (AUDIT.md EICU-09).
+        ms_cfg = self.config.get('missingness', {})
+        flags = {}
+        indicators = None
+        if ms_cfg.get('indicators', False):
+            indicators = MissingnessIndicators(
+                min_rate=ms_cfg.get('min_rate', 0.01),
+                max_rate=ms_cfg.get('max_rate', 0.95),
+            )
+            flags['train'] = indicators.fit_transform(X_train_num, num_cols)
+            flags['val'] = indicators.transform(X_val_num)
+            flags['test'] = indicators.transform(X_test_num)
+            logger.info(f"Added {len(indicators.feature_names)} missingness indicators")
+
         # --- Right tower: impute + scale ---
         # 1. Median imputation
         imputer = SimpleImputer(strategy='median')
@@ -196,7 +215,7 @@ class ObsTrainReadyPipeline:
         
         # --- Assemble ---
         # Concatenate categorical + numeric, and attach the label
-        def merge_pack(x_cat, x_num, original_df):
+        def merge_pack(x_cat, x_num, original_df, x_flags=None):
             # Reset indices so the pieces align
             x_cat = x_cat.reset_index(drop=True)
             x_num = x_num.reset_index(drop=True)
@@ -205,15 +224,20 @@ class ObsTrainReadyPipeline:
             pids = original_df['patient_id'].reset_index(drop=True)
             
             # Join side by side
-            return pd.concat([pids, y, x_cat, x_num], axis=1)
+            parts = [pids, y, x_cat, x_num]
+            if x_flags is not None and not x_flags.empty:
+                parts.append(x_flags.reset_index(drop=True))
+            return pd.concat(parts, axis=1)
 
-        train_pack = merge_pack(X_train_cat, X_train_num, train_df)
-        val_pack = merge_pack(X_val_cat, X_val_num, val_df)
-        test_pack = merge_pack(X_test_cat, X_test_num, test_df)
+        train_pack = merge_pack(X_train_cat, X_train_num, train_df, flags.get('train'))
+        val_pack = merge_pack(X_val_cat, X_val_num, val_df, flags.get('val'))
+        test_pack = merge_pack(X_test_cat, X_test_num, test_df, flags.get('test'))
         
         self._fitted = {"encoders": encoders, "imputer": imputer,
                         "scaler": scaler, "cat_cols": cat_cols,
-                        "num_cols": num_cols}
+                        "num_cols": num_cols,
+                        "missingness": indicators,
+                        "indicator_cols": indicators.feature_names if indicators else []}
         return train_pack, val_pack, test_pack
 
     def run_protocol(self, protocol_name: str, df: pd.DataFrame, seed: int):

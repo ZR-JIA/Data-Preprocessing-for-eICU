@@ -18,6 +18,10 @@ from .reproducibility import (
     ResultsExporter,
     DataVersionManager
 )
+from .missingness import (
+    MissingnessIndicators,
+    missingness_report,
+)
 from .train_ready_exporter import (
     TrainReadyExporter,
 )
@@ -31,6 +35,8 @@ __all__ = [
     'SeedManager',
     'DataVersionManager',
     'TrainReadyExporter',
+    'MissingnessIndicators',
+    'missingness_report',
     'ExperimentTracker',
     'ResultsExporter',
 ]
