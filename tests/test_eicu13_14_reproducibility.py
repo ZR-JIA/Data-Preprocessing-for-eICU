@@ -75,7 +75,9 @@ def test_fitted_transforms_are_persisted(tmp_path):
     pkl = next((out / "PACKS" / "patient_stratified").rglob("transforms.pkl"))
     with open(pkl, "rb") as f:
         fitted = pickle.load(f)
-    assert set(fitted) == {"encoders", "imputer", "scaler", "cat_cols", "num_cols"}
+    # Subset, not equality: a branch may persist more than this (mmda_enhance
+    # adds the fitted missingness indicators), but never less.
+    assert {"encoders", "imputer", "scaler", "cat_cols", "num_cols"} <= set(fitted)
     assert fitted["cat_cols"] == ["age", "gender", "ethnicity"]
     assert hasattr(fitted["scaler"], "mean_")
 
