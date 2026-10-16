@@ -33,7 +33,10 @@ class PatientLevelSplitter:
         self.val_size = val_size
         self.test_size = test_size
         self.stratify_col = stratify_col
-        self.group_cols = group_cols or ['patient_id', 'site_id']
+        # Group on the person alone. Adding site_id would split a patient who
+        # was admitted to two hospitals into two groups, reintroducing the very
+        # overlap this splitter exists to prevent (AUDIT.md EICU-02).
+        self.group_cols = group_cols or ['patient_id']
         self.random_state = random_state
         self.split_indices = {}
         
@@ -55,8 +58,9 @@ class PatientLevelSplitter:
         if missing_cols:
             raise ValueError(f"missing required columns: {missing_cols}")
         
-        # Group so that one group never spans two splits
-        group_key = '_'.join(self.group_cols)
+        # Work on a copy: writing _group_key onto the caller's frame leaked a
+        # stale column into every later protocol run.
+        df = df.copy()
         df['_group_key'] = df[self.group_cols].astype(str).agg('_'.join, axis=1)
         
         # Collapse to one row per group

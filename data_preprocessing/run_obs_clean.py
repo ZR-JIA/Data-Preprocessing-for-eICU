@@ -26,7 +26,7 @@ from obs_cleaning import (
 # matrix (AUDIT.md EICU-01).
 DEFAULT_TABLES = {
     "patient": [
-        "patientunitstayid", "age", "gender", "ethnicity", "hospitalid",
+        "patientunitstayid", "uniquepid", "age", "gender", "ethnicity", "hospitalid",
         "admissionheight", "admissionweight", "hospitaldischargestatus",
         "unitadmitoffset",
     ],
@@ -140,6 +140,7 @@ def main():
     # 2. Select the static features the dual-tower model needs.
     #    Feature scan: age, gender and site_id are categorical; admission_time is noise.
     static_cols = [
+        "uniquepid",        # person-level key, required for leakage-free splits
         "age", 
         "gender", 
         "ethnicity",

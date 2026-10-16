@@ -15,7 +15,8 @@ time_window_hours: 72
 # what the published run actually used (AUDIT.md EICU-05).
 tables:
   patient:
-    - "patientunitstayid"
+    - "patientunitstayid"       # one ICU stay
+    - "uniquepid"               # the PERSON; required for patient-level splits
     - "age"
     - "gender"
     - "ethnicity"

@@ -83,13 +83,23 @@ class ObsTrainReadyPipeline:
             if col not in df.columns:
                 raise ValueError(f"Required column missing from the data: {col}")
 
-        # Map the identifier
-        df['patient_id'] = df['patientunitstayid'].astype(str)
+        # patient_id must identify the PERSON, not the ICU stay. eICU gives one
+        # uniquepid several patientunitstayid values when a patient is admitted
+        # more than once; keying splits on the stay let the same person appear in
+        # both train and test (AUDIT.md EICU-02).
+        if 'uniquepid' not in df.columns:
+            raise ValueError(
+                "obs_cleaned.csv has no 'uniquepid' column. Regenerate it with "
+                "run_obs_clean.py from this branch: output produced by the "
+                "previous cleaner cannot support a patient-level split."
+            )
+        df['patient_id'] = df['uniquepid'].astype(str)
         
         # site_id is needed by the left tower
         if 'site_id' not in df.columns:
             logger.warning("site_id is missing; falling back to a synthetic value")
-            # Synthetic stand-in so the run completes; should not happen in practice.
+            # Synthetic stand-in so the run completes. Stage 1 raises when
+            # hospitalid is absent, so this should be unreachable in practice.
             df['site_id'] = (df['patient_id'].astype(int) % 10).astype(str)
         else:
             df['site_id'] = df['site_id'].astype(str)
@@ -108,7 +118,8 @@ class ObsTrainReadyPipeline:
         logger.info("Starting dual-tower preprocessing (fit on train)...")
         
         target_col = 'mortality'
-        exclude_cols = ['patient_id', 'patientunitstayid', 'admission_time', '_group_key', target_col]
+        exclude_cols = ['patient_id', 'patientunitstayid', 'uniquepid',
+                        'admission_time', '_group_key', target_col]
         
         # 1. Left tower: categorical features, encoded to 0, 1, 2 ... indices
         cat_cols = ['age', 'gender', 'ethnicity', 'site_id']
