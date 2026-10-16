@@ -3,7 +3,7 @@ CONFIG_CLEAN   = config/obs_cleaning.yaml
 CONFIG_READY   = config/obs_trainReady.yaml
 WORKDIR        = data_preprocessing
 
-.PHONY: all clean stage1 stage2 env check
+.PHONY: all clean stage1 stage2 env check test
 
 ## Run both stages
 all: stage1 stage2
@@ -20,6 +20,10 @@ stage2:
 env:
 	conda env create -f $(WORKDIR)/config/environment.yaml
 	@echo "Run: conda activate Preprocessing"
+
+## Run the test suite
+test:
+	pytest tests/ -q
 
 ## Run QC checks on cleaned data
 check:

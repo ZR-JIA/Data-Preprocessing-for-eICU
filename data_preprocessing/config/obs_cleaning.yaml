@@ -1,9 +1,10 @@
 # config/obs_cleaning.yaml
+# Both stages are launched from data_preprocessing/ (see the Makefile), so
+# these paths are relative to that directory, not to the repository root.
 paths:
-  project_root: "ProjectStroke"
-  input_raw: "inputs/Observative"
-  output_clean: "outputs/obs_cleaned.csv"
-  log_dir: "ProjectStroke/logs"
+  input_raw: "../Input/Observative"
+  output_clean: "../outputs/obs_cleaned.csv"
+  log_dir: "../logs"
 
 time_window_hours: 72
 

@@ -12,6 +12,7 @@ dependencies:
     # --- Core data handling ---
     - pandas>=2.0.0      # main dataframe engine
     - numpy>=1.24        # numerics
+    - scikit-learn>=1.3  # splitters, imputers, scalers used by stage 2
     - polars>=0.20.0     # fallback engine when pandas runs out of memory
     
     # --- Tooling ---
