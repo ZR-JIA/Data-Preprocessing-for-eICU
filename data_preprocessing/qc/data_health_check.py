@@ -39,10 +39,14 @@ def find_patient_id_column(df: pd.DataFrame) -> Optional[str]:
     """
     Find the patient ID column, trying the usual names first.
     """
+    # uniquepid first: patientunitstayid identifies one ICU *stay*, so
+    # counting it reports stays as if they were people and understates how
+    # often one patient recurs (AUDIT.md EICU-15, EICU-02).
     possible_id_cols = [
+        'uniquepid', 'subject_id',
+        'patient_id',
         'patientunitstayid', 'patient_unit_stay_id',
-        'subject_id', 'hadm_id', 'icustay_id',
-        'patient_id', 'id', 'ID', 'stay_id'
+        'hadm_id', 'icustay_id', 'stay_id', 'id', 'ID'
     ]
     
     for col in possible_id_cols:
@@ -181,8 +185,21 @@ def detect_data_leakage(df: pd.DataFrame, target_col: str) -> Dict:
         'label', 'target', 'ground_truth'
     ]
     
+    # Database identifiers are the case this screen was blind to: a column
+    # like vitalperiodicid_mean correlates with the target nowhere near 0.9 and
+    # matches none of the keywords above, yet it is a row counter rather than a
+    # measurement (AUDIT.md EICU-01, EICU-15).
+    identifier_markers = ['periodicid', 'labid', '_id_', 'rowid', 'recordid']
+
     all_columns = [col for col in df.columns if col != target_col]
-    found_suspicious = False
+    for col in all_columns:
+        low = col.lower()
+        if any(m in low for m in identifier_markers) or low.endswith('id'):
+            leakage_report['suspicious_keywords'].append(col)
+            print(f"  NON-CLINICAL: '{col}' looks like a database identifier, "
+                  f"not a measurement")
+
+    found_suspicious = bool(leakage_report['suspicious_keywords'])
     
     for col in all_columns:
         col_lower = col.lower()
@@ -406,7 +423,10 @@ def main():
     
     if total_leakage_flags == 0:
         print("A2: no obviously leaking feature was found")
-        print("  NOTE: this screen only catches |r| > 0.9 and suspicious names.")
+        print("  NOTE: this screen only catches |r| > 0.9, identifier-shaped")
+        print("  names and keyword matches. It cannot see a feature that leaks")
+        print("  weakly, nor one that is non-clinical without saying so in its")
+        print("  name. A clean result here is not evidence of absence.")
     else:
         print(f"A2: {total_leakage_flags} suspicious feature(s)")
         print("  Suggested:")

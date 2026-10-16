@@ -1,8 +1,16 @@
 """
-Preprocessing.
+Preprocessing utilities.
 
 Imputation, scaling and feature selection, all fitted on the training split
 only and then applied to val/test.
+
+NOT USED BY THE PIPELINE. run_obs_trainReady.py performs its own imputation
+and scaling inline, in ObsTrainReadyPipeline._dual_tower_preprocess, and never
+imports TrainOnlyPreprocessor. The inline code is correctly fit-on-train, so
+results are unaffected, but the assertions and logging in this module describe
+something that does not run -- which is misleading in the opposite direction
+from a bug (AUDIT.md R-7). This module is kept as a library for callers that
+want it; it is not evidence about how the published data was prepared.
 """
 
 import numpy as np
