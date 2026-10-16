@@ -1,3 +1,11 @@
+> [!NOTE]
+> This branch corresponds to the published [CCAI 2026 paper](https://ieeexplore.ieee.org/document/11641950/). Its code is
+> unchanged since publication and is pinned by the tag `ccai2026-published`; only this
+> notice and the paper section below have been updated.
+>
+> - Corrections to the paper, including the model's categorical tower, are recorded in the model repository: see [Corrections to the CCAI 2026 paper](https://github.com/ZR-JIA/Dual-Tower-Transformer-eICU-Stroke#corrections-to-the-ccai-2026-paper-october-2026).
+> - Defects found later in this preprocessing pipeline are documented in [AUDIT.md](https://github.com/ZR-JIA/Data-Preprocessing-for-eICU/blob/fix/AUDIT.md) and corrected on the [`fix`](https://github.com/ZR-JIA/Data-Preprocessing-for-eICU/tree/fix) branch.
+
 # eICU Stroke Data Preprocessing
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
@@ -132,7 +140,7 @@ data_preprocessing/
 
 ## Citation
 
-If you use this pipeline, please cite the paper (link above). BibTeX will be added once the proceedings are published.
+If you use this pipeline, please cite the paper (BibTeX below).
 
 ## Paper
 
@@ -143,18 +151,20 @@ If you use this pipeline, please cite the paper (link above). BibTeX will be add
 >
 > \*Corresponding authors
 >
-> 📄 **[Paper Link](https://ieeexplore.ieee.org/document/11641950/)**
+> 📄 **[IEEE Xplore](https://ieeexplore.ieee.org/document/11641950/)**
 
 If you find this work useful, please cite:
 
 ```bibtex
-@inproceedings{Jia2026DualTower,
-  title     = {Deep Learning for Stroke Mortality Prediction in eICU: A Dual-Tower Transformer Framework},
-  author    = {Jia, Zhengrong and Wong, Kwong-Cheong},
-  booktitle = {Proceedings of the CCAI Conference},
-  year      = {2026},
-  note      = {Accepted}
-}
+@INPROCEEDINGS{11641950,
+  author={Jia, Zhengrong and Wong, Kwong-Cheong},
+  booktitle={2026 6th International Conference on Computer Communication and Artificial Intelligence (CCAI)},
+  title={Deep Learning for Stroke Mortality Prediction in eICU: A Dual-Tower Transformer Framework},
+  year={2026},
+  volume={},
+  number={},
+  pages={76-81},
+  doi={10.1109/CCAI69603.2026.11641950}}
 ```
 
 ---
