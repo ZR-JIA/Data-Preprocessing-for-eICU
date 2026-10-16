@@ -15,7 +15,8 @@ from obs_cleaning import (
     aggregate_labs,
     drop_sparse_and_impute,
     save_data,
-    extract_mortality_label
+    extract_mortality_label,
+    apply_observation_window,
 )
 
 # Fallback column whitelist and QC limits for the ad-hoc CLI path (no --config).
@@ -28,9 +29,10 @@ DEFAULT_TABLES = {
     "patient": [
         "patientunitstayid", "uniquepid", "age", "gender", "ethnicity", "hospitalid",
         "admissionheight", "admissionweight", "hospitaldischargestatus",
-        "unitadmitoffset",
+        "unitadmitoffset", "unitdischargeoffset",
     ],
-    "diagnosis": ["patientunitstayid", "icd9code", "diagnosisstring"],
+    "diagnosis": ["patientunitstayid", "icd9code", "diagnosisstring",
+                  "diagnosisoffset"],
     "vitalPeriodic": [
         "patientunitstayid", "observationoffset", "heartrate", "respiration",
         "sao2", "temperature", "systemicsystolic", "systemicdiastolic",
@@ -102,9 +104,22 @@ def main():
 
     # Step 2: Cohort selection
     print("\n[2/7] Selecting stroke cohort...")
-    cohort_pat = select_cohort(patient, diagnosis)
+    window_minutes = time_window * 60
+    cohort_pat, cohort_report = select_cohort(patient, diagnosis, window_minutes)
+    print(f"  Diagnoses considered:   {cohort_report['diagnoses_total']}")
+    if "diagnoses_within_window" in cohort_report:
+        print(f"  Within the window:      {cohort_report['diagnoses_within_window']}")
+    print(f"  Stays by ICD-9:         {cohort_report['by_icd9']}")
+    print(f"  Stays by keyword only:  {cohort_report['by_keyword_only']}")
+    print(f"  Stroke stays selected:  {cohort_report['stays_selected']}")
+
+    # Require the stay to span the observation window, so the length of the
+    # record is not itself a predictor of the outcome.
+    cohort_pat, window_report = apply_observation_window(cohort_pat, window_minutes)
+    print(f"  Shorter than {time_window}h, dropped: {window_report['stays_shorter_than_window']}")
+    print(f"  Stays remaining:        {window_report['stays_after']}")
+
     keep_ids = set(cohort_pat["patientunitstayid"].unique())
-    print(f"  Selected {len(keep_ids)} stroke patients")
     
     vital = vital[vital["patientunitstayid"].isin(keep_ids)].copy()
     lab = lab[lab["patientunitstayid"].isin(keep_ids)].copy()
@@ -135,7 +150,14 @@ def main():
     
     # 1. Build the label and drop leakage columns.
     #    patient_labeled now carries 'mortality' and no discharge status.
-    patient_labeled = extract_mortality_label(cohort_pat)
+    patient_labeled, label_report = extract_mortality_label(cohort_pat)
+    print(f"  Discharge status counts: {label_report['status_counts']}")
+    if label_report["dropped_unusable_status"]:
+        print(f"  Dropped (status missing or unrecognised): "
+              f"{label_report['dropped_unusable_status']}")
+    print(f"  Labelled stays: {label_report['stays_after']}, "
+          f"deaths: {label_report['deaths']}, "
+          f"prevalence: {label_report['prevalence']}")
     
     # 2. Select the static features the dual-tower model needs.
     #    Feature scan: age, gender and site_id are categorical; admission_time is noise.

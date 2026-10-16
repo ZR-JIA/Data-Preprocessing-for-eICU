@@ -26,11 +26,14 @@ tables:
     - "admissionweight"
     - "hospitaldischargestatus" # required to build the label; dropped afterwards
     - "unitadmitoffset"
+    - "unitdischargeoffset"     # enforces the observation window (EICU-04)
 
   diagnosis:
     - "patientunitstayid"
     - "icd9code"
     - "diagnosisstring"
+    - "diagnosisoffset"         # a stroke recorded on day 9 cannot define a
+                                # cohort whose features stop at hour 72
 
   # eICU column names, verified against https://eicu.mit.edu/eicutables/vitalperiodic/
   # "map" and "spo2" DO NOT EXIST in this table; the real names are
