@@ -58,6 +58,7 @@ tables:
     - "labname"
     - "labresult"
     - "labresultoffset"
+    - "labmeasurenamesystem"    # the unit; labname alone is hospital-specific
 
 qc:
   missing_threshold: 0.7
@@ -71,3 +72,30 @@ qc:
     systemicsystolic: [40, 250]
     systemicdiastolic: [20, 180]
     systemicmean: [30, 200]
+
+  # Labs previously received no range checking at all (AUDIT.md EICU-08). Keys
+  # are matched against labname case-insensitively; analytes not listed here
+  # are left untouched rather than guessed at.
+  lab_outlier_limits:
+    glucose: [10, 2000]
+    "bedside glucose": [10, 2000]
+    sodium: [90, 200]
+    potassium: [1.0, 10.0]
+    chloride: [50, 160]
+    bicarbonate: [5, 60]
+    creatinine: [0.1, 25.0]
+    BUN: [1, 250]
+    calcium: [2.0, 20.0]
+    magnesium: [0.2, 10.0]
+    albumin: [0.5, 7.0]
+    "total bilirubin": [0.0, 60.0]
+    "total cholesterol": [20, 600]
+    lactate: [0.1, 30.0]
+    pH: [6.5, 8.0]
+    Hgb: [2.0, 25.0]
+    Hct: [5, 75]
+    MCHC: [20, 45]
+    MCV: [50, 150]
+    MPV: [4, 20]
+    "WBC x 1000": [0.0, 200.0]
+    "platelets x 1000": [1, 2000]

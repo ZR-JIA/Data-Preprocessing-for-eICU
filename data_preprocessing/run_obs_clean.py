@@ -11,8 +11,10 @@ from obs_cleaning import (
     select_cohort,
     align_time_window,
     apply_outlier_nan,
+    apply_lab_outlier_nan,
     aggregate_vitals,
     aggregate_labs,
+    harmonise_lab_units,
     drop_sparse_and_impute,
     save_data,
     extract_mortality_label,
@@ -38,7 +40,8 @@ DEFAULT_TABLES = {
         "sao2", "temperature", "systemicsystolic", "systemicdiastolic",
         "systemicmean",
     ],
-    "lab": ["patientunitstayid", "labname", "labresult", "labresultoffset"],
+    "lab": ["patientunitstayid", "labname", "labresult", "labresultoffset",
+            "labmeasurenamesystem"],
 }
 
 DEFAULT_OUTLIER_LIMITS = {
@@ -70,6 +73,8 @@ def main():
         time_window = args.time_window or cfg.get("time_window_hours", 72)
         missing_threshold = args.missing_threshold or cfg["qc"].get("missing_threshold", 0.7)
         outlier_limits = {k: tuple(v) for k, v in cfg["qc"].get("outlier_limits", {}).items()}
+        lab_outlier_limits = {k: tuple(v)
+                              for k, v in cfg["qc"].get("lab_outlier_limits", {}).items()}
         tables = cfg.get("tables")
         if not tables:
             raise ValueError(
@@ -85,6 +90,7 @@ def main():
         time_window = args.time_window or 72  # keep in step with the YAML default
         missing_threshold = args.missing_threshold or 0.7
         outlier_limits = dict(DEFAULT_OUTLIER_LIMITS)
+        lab_outlier_limits = {}
         tables = DEFAULT_TABLES
 
     print("=" * 60)
@@ -132,8 +138,20 @@ def main():
     # Step 4: Outlier handling
     print("\n[4/7] Handling outliers...")
     vital, outlier_counts = apply_outlier_nan(vital, outlier_limits)
-    total_outliers = sum(outlier_counts.values())
-    print(f"  Replaced {total_outliers} outlier values with NaN")
+    print(f"  Vitals: blanked {sum(outlier_counts.values())} implausible values")
+
+    # Labs are long-format, so the wide helper above never reached them.
+    lab, lab_outlier_counts = apply_lab_outlier_nan(lab, lab_outlier_limits)
+    print(f"  Labs:   blanked {sum(lab_outlier_counts.values())} implausible values")
+
+    # One unit per analyte, otherwise mg/dL and mmol/L are averaged together.
+    lab, unit_report = harmonise_lab_units(lab)
+    if unit_report.get("unit_column_present"):
+        mixed = unit_report["analytes_with_mixed_units"]
+        print(f"  Labs:   {len(mixed)} of {unit_report['analytes']} analytes had "
+              f"mixed units; dropped {unit_report['rows_dropped']} rows")
+        if mixed:
+            print(f"          mixed-unit analytes: {mixed}")
 
     # Step 5: Feature aggregation
     print("\n[5/7] Aggregating features...")
