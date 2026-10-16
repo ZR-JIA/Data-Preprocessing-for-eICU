@@ -30,6 +30,9 @@ difference between `main` and `fix` as a correction to the paper's conclusions:
 several findings cannot be quantified without the eICU tables, and AUDIT.md
 says so for each one.
 
+Corrections to the paper, including the model's categorical tower, are recorded
+in the model repository: see [Corrections to the CCAI 2026 paper](https://github.com/ZR-JIA/Dual-Tower-Transformer-eICU-Stroke#corrections-to-the-ccai-2026-paper-october-2026).
+
 **Reproducing the paper**: start from the tag `ccai2026-published`.
 **Doing new work**: start from `fix`.
 
@@ -43,8 +46,8 @@ It is not meant to. Three corrections change the cohort itself:
 - the stroke definition no longer admits chronic stenosis, ill-defined
   cerebrovascular disease, or heat stroke.
 
-A fourth removes three features that were database row identifiers. You cannot
-correct a leak and keep the number it produced.
+A fourth keeps three aggregates of a database row identifier out of the feature
+matrix (AUDIT.md EICU-01).
 
 ---
 
@@ -203,12 +206,12 @@ against both versions fail on `main` and pass on `fix`.
 
 ## A note on the history
 
-The commit history was rewritten once, after publication, to replace Chinese
-comments, docstrings and log messages with English. Every rewritten file was
+The commit history was rewritten after publication to translate comments,
+docstrings and log messages into English and to normalise commit metadata. Every rewritten file was
 verified to parse and to yield an identical AST under a comparison that masks
 string constants and f-string prose while preserving interpolated expressions.
 
-Commit identifiers from before that rewrite no longer resolve. The code at
+Commit identifiers from before these rewrites no longer resolve. The code at
 `ccai2026-published` is functionally the published code, but is not
 byte-identical to what was originally committed.
 
@@ -232,15 +235,15 @@ byte-identical to what was originally committed.
 > 📄 **[IEEE Xplore](https://ieeexplore.ieee.org/document/11641950/)**
 
 ```bibtex
-@inproceedings{Jia2026DualTower,
-  title     = {Deep Learning for Stroke Mortality Prediction in {eICU}:
-               A Dual-Tower Transformer Framework},
-  author    = {Jia, Zhengrong and Wong, Kwong-Cheong},
-  booktitle = {2026 the 6th International Conference on Computer Communication
-               and Artificial Intelligence (CCAI)},
-  year      = {2026},
-  publisher = {IEEE}
-}
+@INPROCEEDINGS{11641950,
+  author={Jia, Zhengrong and Wong, Kwong-Cheong},
+  booktitle={2026 6th International Conference on Computer Communication and Artificial Intelligence (CCAI)},
+  title={Deep Learning for Stroke Mortality Prediction in eICU: A Dual-Tower Transformer Framework},
+  year={2026},
+  volume={},
+  number={},
+  pages={76-81},
+  doi={10.1109/CCAI69603.2026.11641950}}
 ```
 
 To cite this repository, reference the tag rather than a branch. Branches move;

@@ -306,14 +306,14 @@ straight through it. A clean result from this script is not evidence of absence.
 
 ## Note on history
 
-The commit history was rewritten once, after publication, to replace Chinese
-comments, docstrings and log messages with English. Every rewritten file was
+The commit history was rewritten after publication to translate comments,
+docstrings and log messages into English and to normalise commit metadata. Every rewritten file was
 verified to parse and to yield an identical AST under a comparison that masks
 string constants and f-string prose while preserving interpolated expressions.
 The single intentional exception is two padding integers in the
 `qc/data_health_check.py` banner, widened because the English title has a
 different display width.
 
-Commit identifiers from before that rewrite are therefore no longer resolvable.
+Commit identifiers from before these rewrites are therefore no longer resolvable.
 The code at `ccai2026-published` is functionally the published code, but is not
 byte-identical to what was originally committed.
