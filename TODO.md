@@ -15,20 +15,32 @@ method. `mmda_enhance` descends from `fix` and inherits it.
 
 ## 1. Feature manifest from the original run
 
-**Settles:** EICU-01, EICU-10, and the paper's own numbers.
+**Closed for the tower assignment. Open for the numeric contents.**
 
-Count the categorical and numeric features the published run actually used.
+The config snapshots and `dualtower.py` settle which columns went where: the
+left tower embedded gender, ethnicity and site_id, and age was a right-tower
+feature. AUDIT.md EICU-10 records the evidence and the consequences -- that
+the embedding widths hold but the paper's feature counts do not (94 inputs in
+all, 91 of them in the right tower), and that standardising before the
+embedding lookup collapsed each categorical column onto a small number of
+indices.
 
-- If categorical is 3 and numeric is 94, the paper's `h_cat` in R^22 and
-  "all 97 features" hold, and `site_id` was not a model feature at the time.
-- If categorical is 4, then `h_cat` was not 22 and the totals in the paper do
-  not describe the run.
-- Separately, check whether `vitalperiodicid_mean`, `_std` or `_slope` appear
-  among the numeric features. If they do, three of the "94-dimensional vector
-  of continuous physiological vitals" were not physiological.
+**What is still open.** The right tower took every column that was not at
+position 1, 2 or 3, so whether the three `vitalperiodicid_*` columns were among
+its 91 inputs still depends on the February 2026 train-ready CSVs, which were
+not retained under the Data Use Agreement.
 
-The corrected pipeline now writes this to `train_ready/DATA/feature_list.json`
-on every run, so the question cannot recur.
+Two ways to close it:
+
+- Re-run stage 1 and stage 2 at the `ccai2026-published` tag against the eICU
+  tables and inspect the column list. This reproduces the inputs without
+  re-running the experiment.
+- Or find the column names in the original logs. The logs checked so far
+  record only the width (94 in all, so 91 in the right tower) and the first
+  five names.
+
+The corrected pipeline writes `train_ready/DATA/feature_list.json` on every
+run, so the question cannot recur.
 
 ## 2. Patient overlap between splits
 

@@ -181,14 +181,67 @@ variability, and the cohort median asserts a typical one.
 Addressed on `mmda_enhance`, not on `fix`: adding indicators changes the feature
 schema the paper describes.
 
-### EICU-10 - The categorical schema does not match the paper
+### EICU-10 - The left tower does not hold the features the paper names
 
-**Confirmed.** `cat_cols` is
-`['age', 'gender', 'ethnicity', 'site_id']` - four features. The paper's left
-tower has three (16+2+4 = 22 dimensions); a fourth embedding cannot produce 22.
+**Resolved by evidence, and not in the direction first assumed.**
 
-Separately, unseen categories are mapped to `encoder.classes_[0]`, a real
-hospital or ethnicity, rather than to a reserved index.
+The config snapshots kept with the original experiment name three categorical
+features -- `age`, `gender`, `ethnicity`, with vocabularies 150/10/50 and
+embedding widths 16/2/4. Those names are labels. The model selects columns by
+**position**:
+
+```python
+cat_idx_set = set(f['index'] for f in self.cat_features_config)   # {1, 2, 3}
+self.num_indices = [i for i in range(input_dim) if i not in cat_idx_set]
+...
+col_input = torch.clamp(x[:, idx], min=0, max=feat['num_classes'] - 1).long()
+```
+
+Stage 2 emits `patient_id, mortality, age, gender, ethnicity, site_id, <numeric>`.
+The model drops the target and `drop_cols = [patient_id, hospital_id, unit_id]`;
+`hospital_id` and `unit_id` do not exist under those names, so nothing else
+goes. What remains is
+
+| position | column | receives |
+|---|---|---|
+| 0 | age | **right tower** |
+| 1 | gender | vocab 150, emb 16 (configured for "age") |
+| 2 | ethnicity | vocab 10, emb 2 (configured for "gender") |
+| 3 | site_id | vocab 50, emb 4 (configured for "ethnicity") |
+
+So the left tower embedded **gender, ethnicity and site_id**, and age was
+processed as a numeric feature. The paper's Section III-B-1 and Table I
+describe the intended assignment, not the one that ran.
+
+**The embedding arithmetic holds; the feature counts do not.** Embedding
+widths follow position too, so `h_cat` is still 16+2+4 = 22 and `h_joint` is
+still 22+64 = 86. But the published runs had 94 input columns in all, not 97:
+an Optuna log written the same day from the same train-ready files records
+`Feature count: 94`, with the columns beginning `age, gender, ethnicity,
+site_id, admissionheight`, and the model repository hard-codes
+`input_dim = 94` for its NN baseline. The left tower took three of them and
+the right tower the other 91, each column used once. The paper's 94 for the
+right tower is the total, and its 97 adds the three categorical columns a
+second time. No reported performance number changes; what differs is which
+feature sits in which tower, and the two counts.
+
+**A second consequence.** `preprocessor.py` fits `StandardScaler` on the whole
+feature matrix. Stage 2 had already label-encoded the categorical columns to
+integers, so `select_dtypes(['object', 'category'])` finds nothing, no one-hot
+encoding happens, and the scaler standardises the categorical columns along
+with everything else. The embedding layers therefore receive standardised
+floats, clamped to the vocabulary range and then truncated by `.long()`.
+
+Standardised values cluster around zero. Every category whose code lies below
+its column mean is clamped to index 0, and the remaining categories reach only
+the lowest few indices; exactly how many depends on each column's distribution,
+which the surviving records do not include. Most of each embedding table
+(150x16, 10x2, 50x4) was therefore never used, and distinct categories -- the
+site_id values in particular -- share indices.
+
+**Still confirmed as a repository defect.** Unseen categories are mapped to
+`encoder.classes_[0]`, a real hospital or ethnicity, rather than to a reserved
+index. Fixed on `fix`.
 
 ### EICU-11 - Sparsity filtering happens before the split
 
