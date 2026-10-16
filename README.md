@@ -24,7 +24,8 @@ the paper it accompanies is final. That is why there are three branches.
 | **`mmda_enhance`** | Methodological additions that deliberately depart from the paper's feature schema. | You want the missing-data treatment described there. |
 
 `main` carries known defects, on purpose. They are catalogued in
-**[AUDIT.md](AUDIT.md)**, each with its evidence and its status. Do not read a
+**[AUDIT.md](AUDIT.md)**, each with its evidence and its status, and the
+checks still outstanding are listed in **[TODO.md](TODO.md)**. Do not read a
 difference between `main` and `fix` as a correction to the paper's conclusions:
 several findings cannot be quantified without the eICU tables, and AUDIT.md
 says so for each one.
