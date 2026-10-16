@@ -18,6 +18,38 @@ from obs_cleaning import (
     extract_mortality_label
 )
 
+# Fallback column whitelist and QC limits for the ad-hoc CLI path (no --config).
+# They mirror config/obs_cleaning.yaml: both entry points must agree, because
+# previously they named different vital columns and only one of the two sets
+# ever took effect (AUDIT.md EICU-05, EICU-06). No entry point may read a raw
+# table unrestricted -- that is what admitted vitalperiodicid into the feature
+# matrix (AUDIT.md EICU-01).
+DEFAULT_TABLES = {
+    "patient": [
+        "patientunitstayid", "age", "gender", "ethnicity", "hospitalid",
+        "admissionheight", "admissionweight", "hospitaldischargestatus",
+        "unitadmitoffset",
+    ],
+    "diagnosis": ["patientunitstayid", "icd9code", "diagnosisstring"],
+    "vitalPeriodic": [
+        "patientunitstayid", "observationoffset", "heartrate", "respiration",
+        "sao2", "temperature", "systemicsystolic", "systemicdiastolic",
+        "systemicmean",
+    ],
+    "lab": ["patientunitstayid", "labname", "labresult", "labresultoffset"],
+}
+
+DEFAULT_OUTLIER_LIMITS = {
+    "heartrate": (20, 220),
+    "respiration": (4, 60),
+    "sao2": (50, 100),
+    "temperature": (32, 42),
+    "systemicsystolic": (40, 250),
+    "systemicdiastolic": (20, 180),
+    "systemicmean": (30, 200),
+}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", help="YAML config file (optional)")
@@ -36,6 +68,13 @@ def main():
         time_window = args.time_window or cfg.get("time_window_hours", 72)
         missing_threshold = args.missing_threshold or cfg["qc"].get("missing_threshold", 0.7)
         outlier_limits = {k: tuple(v) for k, v in cfg["qc"].get("outlier_limits", {}).items()}
+        tables = cfg.get("tables")
+        if not tables:
+            raise ValueError(
+                f"{args.config}: missing the 'tables' block. It declares which "
+                "columns are read from each raw CSV and is required -- without it "
+                "every column is loaded, including database row identifiers."
+            )
     else:
         if not args.input_dir or not args.output_file:
             parser.error("--input_dir and --output_file required when not using --config")
@@ -43,15 +82,8 @@ def main():
         output_file = args.output_file
         time_window = args.time_window or 72  # keep in step with the YAML default
         missing_threshold = args.missing_threshold or 0.7
-        outlier_limits = {
-            "heartrate": (20, 220),
-            "temperature": (32, 42),
-            "respiration": (4, 60),
-            "systemicsystolic": (40, 250),
-            "systemicdiastolic": (20, 180),
-            "systemicmean": (30, 200),
-            "sao2": (50, 100),
-        }
+        outlier_limits = dict(DEFAULT_OUTLIER_LIMITS)
+        tables = DEFAULT_TABLES
 
     print("=" * 60)
     print("STROKE DATA CLEANING PIPELINE")
@@ -59,7 +91,7 @@ def main():
 
     # Step 1: Load data
     print("\n[1/7] Loading data...")
-    patient, diagnosis, vital, lab = load_data(input_dir)
+    patient, diagnosis, vital, lab = load_data(input_dir, tables=tables)
     print(f"  Patient: {patient.shape}, Diagnosis: {diagnosis.shape}")
     if 'hospitalid' in patient.columns:
         print(f"  Found real hospital IDs: {patient['hospitalid'].nunique()} distinct hospitals")

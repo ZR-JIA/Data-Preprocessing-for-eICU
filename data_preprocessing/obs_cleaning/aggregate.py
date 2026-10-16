@@ -2,6 +2,20 @@
 import pandas as pd
 import numpy as np
 
+# Columns that appear in eICU vitals tables but carry no physiological meaning.
+# The config whitelist should already keep them out; this is a second guard so a
+# future change to the loader cannot silently put a database row identifier into
+# the feature matrix. vitalperiodicid is an auto-increment primary key, so its
+# mean/std/slope encode record ordering and monitoring density, not patient
+# state (AUDIT.md EICU-01).
+NON_PHYSIOLOGICAL = frozenset({
+    "vitalperiodicid",
+    "vitalaperiodicid",
+    "labid",
+    "observationoffset",
+    "labresultoffset",
+})
+
 # Feature aggregation strategy: keep temporal dynamics, stay interpretable.
 VITAL_STATS = ["mean", "std"]  # paired with slope to express the trend
 LAB_STATS = ["mean", "std"]    # level and variability, robust to single extremes
@@ -19,7 +33,8 @@ def _trend_slope(group: pd.DataFrame, value_col: str, time_col: str) -> float:
 def aggregate_vitals(vital: pd.DataFrame, patient_key: str = "patientunitstayid") -> pd.DataFrame:
     if vital.empty:
         return pd.DataFrame()
-    value_cols = [c for c in vital.columns if c not in (patient_key, "observationoffset")]
+    excluded = NON_PHYSIOLOGICAL | {patient_key}
+    value_cols = [c for c in vital.columns if c not in excluded]
     value_cols = [c for c in value_cols if pd.api.types.is_numeric_dtype(vital[c])]
     if not value_cols:
         return pd.DataFrame()
@@ -44,7 +59,8 @@ def aggregate_labs(lab: pd.DataFrame, patient_key: str = "patientunitstayid") ->
         return pd.DataFrame()
     lab_w = lab.pivot_table(index=[patient_key, "labresultoffset"], columns="labname", values="labresult", aggfunc="mean")
     lab_w = lab_w.reset_index()
-    value_cols = [c for c in lab_w.columns if c not in (patient_key, "labresultoffset")]
+    excluded = NON_PHYSIOLOGICAL | {patient_key}
+    value_cols = [c for c in lab_w.columns if c not in excluded]
     if not value_cols:
         return pd.DataFrame()
 

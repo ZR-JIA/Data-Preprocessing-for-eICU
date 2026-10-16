@@ -1,37 +1,68 @@
 # config/obs_cleaning.yaml
 paths:
-  # Adjust to your own layout
   project_root: "ProjectStroke"
   input_raw: "inputs/Observative"
   output_clean: "outputs/obs_cleaned.csv"
   log_dir: "ProjectStroke/logs"
 
-time_window_hours: 72  # fixed observation window
+time_window_hours: 72
 
+# Column whitelist. This block is now ENFORCED by load_data(): a column listed
+# here but absent from the CSV raises, and a column present in the CSV but not
+# listed here is never read. Previously this block was inert -- load_data read
+# every column, which is how the vitalPeriodic primary key reached feature
+# aggregation (AUDIT.md EICU-01) and how the whitelist silently diverged from
+# what the published run actually used (AUDIT.md EICU-05).
 tables:
-  # Added: site_id, ethnicity, height, weight
-  # hospitaldischargestatus is required to build the label and is dropped afterwards
-  patient: 
+  patient:
     - "patientunitstayid"
     - "age"
     - "gender"
-    - "ethnicity"           # left tower
-    - "hospitalid"          # left tower
-    - "admissionheight"     # right tower, numeric
-    - "admissionweight"     # right tower, numeric
-    - "hospitaldischargestatus" # required to build mortality
+    - "ethnicity"
+    - "hospitalid"              # renamed to site_id in stage 1
+    - "admissionheight"
+    - "admissionweight"
+    - "hospitaldischargestatus" # required to build the label; dropped afterwards
     - "unitadmitoffset"
 
-  diagnosis: ["patientunitstayid", "icd9code", "diagnosisstring"]
-  
-  # Vitals and labs unchanged unless more measurements are wanted
-  vitalPeriodic: ["patientunitstayid", "observationoffset", "heartrate", "map", "spo2", "temperature"]
-  lab: ["patientunitstayid", "labname", "labresult", "labresultoffset"]
-  
+  diagnosis:
+    - "patientunitstayid"
+    - "icd9code"
+    - "diagnosisstring"
+
+  # eICU column names, verified against https://eicu.mit.edu/eicutables/vitalperiodic/
+  # "map" and "spo2" DO NOT EXIST in this table; the real names are
+  # "systemicmean" and "sao2". The old whitelist used the wrong names, and
+  # apply_outlier_nan() skips unknown columns silently, so those two limits
+  # never fired (AUDIT.md EICU-06).
+  # vitalperiodicid is deliberately EXCLUDED: it is a database row identifier,
+  # not a physiological measurement (AUDIT.md EICU-01).
+  vitalPeriodic:
+    - "patientunitstayid"
+    - "observationoffset"
+    - "heartrate"
+    - "respiration"
+    - "sao2"
+    - "temperature"
+    - "systemicsystolic"
+    - "systemicdiastolic"
+    - "systemicmean"
+
+  lab:
+    - "patientunitstayid"
+    - "labname"
+    - "labresult"
+    - "labresultoffset"
+
 qc:
   missing_threshold: 0.7
+  # Keys must match the eICU column names above, otherwise the rule is skipped
+  # without warning.
   outlier_limits:
     heartrate: [20, 220]
-    map: [30, 160]
-    spo2: [50, 100]
+    respiration: [4, 60]
+    sao2: [50, 100]
     temperature: [32, 42]
+    systemicsystolic: [40, 250]
+    systemicdiastolic: [20, 180]
+    systemicmean: [30, 200]
