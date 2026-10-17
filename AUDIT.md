@@ -31,21 +31,28 @@ marked **needs data** and list the exact statistic that would settle them.
 | Branch | Contents |
 |---|---|
 | `main` | The state corresponding to publication. Tagged `ccai2026-published`. |
-| `fix` | Corrections to confirmed defects. Changes results where a defect inflated them. |
+| `fix` | Corrections to confirmed defects. Results may differ from the published ones; the size and direction of any change have not been measured. |
 | `mmda_enhance` | Methodological additions that deliberately depart from the paper's feature schema. |
 
 `main` carries the defects described below. It is kept that way on purpose.
 
-## Reference values fixed by the paper
+The published metrics describe the original pipeline. The corrections on
+`fix` address identified defects, but their effect on AUROC and AUPRC has
+not been measured, and no finding below claims that a defect moved the
+reported scores by a particular amount.
 
-The paper pins four numbers that any corrected pipeline can be measured
-against. They are internally consistent (16+2+4 = 22, 22+64 = 86, 94+3 = 97).
+## Values reported in the published paper
+
+The paper reports the values below. They are internally consistent
+(16+2+4 = 22, 22+64 = 86, 94+3 = 97), but two of them do not describe the
+published run, which had 94 inputs in all and 91 in the right tower
+(EICU-10).
 
 | Quantity | Source | Value |
 |---|---|---|
 | Categorical features | Left tower: Age 16-d, Gender 2-d, Ethnicity 4-d | 3, h_cat in R^22 |
-| Numeric features | Right tower: "94-dimensional vector of continuous vitals" | 94 |
-| Total features | Discussion: "all 97 features in a single stream" | 97 |
+| Numeric features | Right tower: "94-dimensional vector of continuous vitals" | 94 (run: 91) |
+| Total features | Discussion: "all 97 features in a single stream" | 97 (run: 94) |
 | Mortality prevalence | Fig. 5: "Baseline (Prevalence = 0.1403)" | 14.03% |
 | Seeds | Table III footnote: "averaged over 5 random seeds" | 5 |
 

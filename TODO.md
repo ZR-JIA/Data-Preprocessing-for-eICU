@@ -27,8 +27,10 @@ indices.
 
 **What is still open.** The right tower took every column that was not at
 position 1, 2 or 3, so whether the three `vitalperiodicid_*` columns were among
-its 91 inputs still depends on the February 2026 train-ready CSVs, which were
-not retained under the Data Use Agreement.
+its 91 inputs still depends on the February 2026 train-ready CSVs. Those files
+are not part of this repository, since eICU data cannot be redistributed under
+the Data Use Agreement; the raw eICU tables remain available to credentialed
+users, so the inputs can be regenerated (first option below).
 
 Two ways to close it:
 
@@ -50,7 +52,8 @@ In the stroke cohort, count `uniquepid` values with more than one
 `patientunitstayid`, then intersect the train and test ID sets by `uniquepid`.
 
 A zero intersection means the stay-level key happened to be harmless here. A
-non-zero one gives the size of the optimism in the published test metrics.
+non-zero one measures the overlap; how much it moved the published metrics
+would take a re-run with a patient-level split.
 
 ## 3. Discharge status distribution
 
