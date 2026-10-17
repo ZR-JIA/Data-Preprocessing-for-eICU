@@ -1,7 +1,7 @@
 > [!NOTE]
 > This branch corresponds to the published [CCAI 2026 paper](https://ieeexplore.ieee.org/document/11641950/). Its code is
-> unchanged since publication and is pinned by the tag `ccai2026-published`; only this
-> notice and the paper section below have been updated.
+> unchanged since publication and is pinned by the tag `ccai2026-published`; only its
+> documentation has been updated.
 >
 > - Corrections to the paper, including the model's categorical tower, are recorded in the model repository: see [Corrections to the CCAI 2026 paper](https://github.com/ZR-JIA/Dual-Tower-Transformer-eICU-Stroke#corrections-to-the-ccai-2026-paper-october-2026).
 > - Defects found later in this preprocessing pipeline are documented in [AUDIT.md](https://github.com/ZR-JIA/Data-Preprocessing-for-eICU/blob/fix/AUDIT.md) and corrected on the [`fix`](https://github.com/ZR-JIA/Data-Preprocessing-for-eICU/tree/fix) branch.
@@ -31,7 +31,9 @@ Two stages:
    - Generates mortality label from `hospitaldischargestatus`, then drops it
 
 2. **Train-ready** (`run_obs_trainReady.py`) — `obs_cleaned.csv` → `train/val/test.csv`
-   - Patient-level stratified split (70/10/20)
+   - Stratified 70/10/20 split keyed on the ICU stay (`patientunitstayid`), not the patient
+     (`uniquepid`): a patient with several stays could appear in more than one split
+     ([AUDIT.md](https://github.com/ZR-JIA/Data-Preprocessing-for-eICU/blob/fix/AUDIT.md) EICU-02)
    - Dual-tower encoding: categorical features → LabelEncoder, numeric → Median impute + StandardScaler
    - All stats (median, scaler params) are fit on train only
 
@@ -74,6 +76,9 @@ lab.csv
 ---
 
 ## Usage
+
+> **Before running:** `main` is kept to reproduce the published experiments. For new work,
+> use the [`fix` branch](https://github.com/ZR-JIA/Data-Preprocessing-for-eICU/tree/fix), which corrects the defects listed in its AUDIT.md.
 
 ### Step 1 — Clean
 
@@ -118,7 +123,7 @@ data_preprocessing/
 │   └── save_data.py
 ├── obs_trainReady/             # Stage 2 modules
 │   ├── data_splitting.py       # patient / temporal / site splits
-│   ├── preprocessing.py        # leakage-free scaler/imputer
+│   ├── preprocessing.py        # train-fitted scaler/imputer (not called by stage 2)
 │   ├── train_ready_exporter.py
 │   └── utils.py
 ├── qc/                         # data quality checks (optional)
@@ -135,6 +140,7 @@ data_preprocessing/
 - `hospitaldischargestatus` is used to build the label and then immediately deleted
 - Imputation (median/mode) is fit only on the training split
 - Sparse column dropping (>70% missing) happens before splitting — this is a structural decision, not a learned statistic, and is standard in eICU preprocessing literature
+- The split is keyed on the ICU stay, not the patient, so it does not keep one patient's stays in a single split; `fix` groups by patient (AUDIT.md EICU-02)
 
 ---
 
