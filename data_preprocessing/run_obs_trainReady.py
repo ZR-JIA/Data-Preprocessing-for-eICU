@@ -224,9 +224,12 @@ class ObsTrainReadyPipeline:
         val_pack = merge_pack(X_val_cat, X_val_num, val_df)
         test_pack = merge_pack(X_test_cat, X_test_num, test_df)
         
+        # leading_num_cols and unknown_category are saved so an external
+        # cohort (e.g. MIMIC-IV) can be transformed into the same layout.
         self._fitted = {"encoders": encoders, "imputer": imputer,
                         "scaler": scaler, "cat_cols": cat_cols,
-                        "num_cols": num_cols}
+                        "num_cols": num_cols, "leading_num_cols": leading,
+                        "unknown_category": UNKNOWN_CATEGORY}
         return train_pack, val_pack, test_pack
 
     def run_protocol(self, protocol_name: str, df: pd.DataFrame, seed: int):
