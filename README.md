@@ -9,6 +9,11 @@ Data preprocessing pipeline for the paper:
 This repository takes raw eICU CSVs to train-ready splits. The model training
 code lives in the paper repository above.
 
+> [!NOTE]
+> **Branch `hfcs`** adds a second cohort, heart failure-related cardiogenic shock
+> (HF-CS), on top of `fix`. See [HF-CS cohort](#hf-cs-cohort-branch-hfcs). The
+> stroke pipeline on this branch is the same as on `fix`.
+
 ---
 
 ## Start here: which branch do you want?
@@ -22,6 +27,7 @@ the paper it accompanies is final. That is why there are three branches.
 | **`main`** | The state corresponding to publication. Tagged `ccai2026-published`. | You want to see what produced the published numbers. |
 | **`fix`** | Corrections to the defects found in audit. | You want to build on this work, or run the pipeline yourself. |
 | **`mmda_enhance`** | Methodological additions that deliberately depart from the paper's feature schema. | You want the missing-data treatment described there. |
+| **`hfcs`** | `fix` plus the HF-CS cohort used in the HF-CS study. | You want to reproduce the HF-CS development cohort. |
 
 `main` carries known defects, on purpose. They are catalogued in
 **[AUDIT.md](AUDIT.md)**, each with its evidence and its status, and the
@@ -48,6 +54,64 @@ It is not meant to. Three corrections change the cohort itself:
 
 A fourth keeps three aggregates of a database row identifier out of the feature
 matrix (AUDIT.md EICU-01).
+
+---
+
+## HF-CS cohort (branch `hfcs`)
+
+This branch builds the development cohort of the HF-CS study: Z. Jia (2026). *An Approach to Mortality Prediction in Heart Failure-Related Cardiogenic Shock Using Adaptation and Evaluation of DualTower-FT.* Manuscript.
+The model code is in [Dual-Tower-Transformer-eICU-HFRC-FT](https://github.com/ZR-JIA/Dual-Tower-Transformer-eICU-HFRC-FT), and the
+external validation cohort is built by [Data-Preprocessing-for-MIMIC](https://github.com/ZR-JIA/Data-Preprocessing-for-MIMIC),
+branch `hfcs`.
+
+### Cohort definition (`obs_cleaning/cohort_hfcs.py`)
+
+1. Adult ICU stays (age 18 or older).
+2. Cardiogenic shock **and** heart failure recorded within the first 24 hours, from
+   ICD-9/ICD-10 codes (785.51 or R57.0; 428.\* or I50.\*), the eICU diagnosis
+   string, the APACHE admission diagnosis and a documented history of heart failure.
+3. Excluded: acute myocardial infarction at any time in the stay (410.\*, I21.\*,
+   I22.\*); shock attributed to myocardial ischaemia, pulmonary embolism, cardiac
+   tamponade or a post-infarction septal defect; operative admissions.
+4. ICU stay of at least 24 hours, first eligible stay per patient, and a known
+   hospital discharge status.
+
+On eICU-CRD v2.0 this gives **364 stays from 88 hospitals, with 98 in-hospital
+deaths (26.9%)**. The count at every step is written to `obs_cleaned_flow.json`.
+
+### Inputs
+
+All inputs come from the first 24 hours of the ICU stay: vital signs (mean,
+standard deviation, minimum, maximum and slope), laboratory values (mean, minimum
+and maximum), and treatment flags (vasopressor, inotrope, number of vasoactive
+agents, invasive ventilation, mechanical circulatory support). Columns missing in
+more than 70% of the cohort are dropped, which leaves 175 inputs (172 numerical,
+3 categorical: gender, ethnicity, hospital). APACHE IV predicted mortality is
+exported beside the packs as a comparator and is never used as an input.
+
+### Running it
+
+Place these eICU tables (`.csv` or `.csv.gz`) in `Input/Observative/`: `patient`,
+`diagnosis`, `vitalPeriodic`, `vitalAperiodic`, `lab`, `admissionDx`,
+`pastHistory`, `infusionDrug`, `treatment` and `apachePatientResult`. Then, from
+`data_preprocessing/`:
+
+```bash
+python run_obs_clean.py --config config/obs_cleaning_hfcs.yaml
+python run_obs_trainReady.py --config config/obs_trainReady_hfcs.yaml
+```
+
+| Output | Content |
+|---|---|
+| `outputs/hfcs/obs_cleaned.csv` | one row per stay, raw units |
+| `outputs/hfcs/obs_cleaned_flow.json` | participant flow counts |
+| `train_ready_hfcs/PACKS/patient_stratified/seed_*/` | five patient-level, outcome-stratified splits (60% train, 20% validation, 20% test), imputed and standardised with each split's training data, with the fitted transforms |
+
+The fitted transforms are reused, unchanged, to transform the MIMIC-IV cohort
+(`hfcs/apply_eicu_transforms.py` in the MIMIC repository). All outputs contain
+patient-level data and are ignored by git.
+
+Tests (synthetic data only): `pytest tests/test_hfcs_cohort.py`.
 
 ---
 
