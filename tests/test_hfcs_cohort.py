@@ -129,3 +129,33 @@ def test_chunked_loader_matches_full_filter(tmp_path):
     want = df[df["patientunitstayid"].isin({1, 3})
               & df["observationoffset"].between(0, 1440)].reset_index(drop=True)
     pd.testing.assert_frame_equal(got, want)
+
+
+def test_negated_chf_strings_are_not_heart_failure():
+    neg = ("pulmonary|respiratory failure|acute on chronic respiratory failure "
+           "not due to chf", "")
+    dx = _dx([(1, *CS, 10), (1, *neg, 10), (2, *CS, 10), (2, *HF, 10)])
+    kept, _ = select_hfcs_cohort(_patient([1, 2]), dx, window_minutes=1440)
+    assert kept["patientunitstayid"].tolist() == [2]
+
+
+def test_non_invasive_ventilation_is_not_mechanical_ventilation():
+    trt = pd.DataFrame({"patientunitstayid": [1, 2], "treatmentoffset": [10, 10],
+                        "treatmentstring": [
+                            "pulmonary|ventilation and oxygenation|mechanical ventilation|"
+                            "non-invasive ventilation",
+                            "pulmonary|ventilation and oxygenation|mechanical ventilation"]})
+    f = treatment_flags([1, 2], 1440, treatment=trt)
+    assert f.loc[1, "mech_vent_24h"] == 0 and f.loc[2, "mech_vent_24h"] == 1
+
+
+def test_cs_with_non_hf_cause_excluded_but_valvular_kept():
+    pe = ("cardiovascular|shock / hypotension|cardiogenic shock|due to massive "
+          "pulmonary embolus", "")
+    valve = ("cardiovascular|shock / hypotension|cardiogenic shock|due to mitral "
+             "valvular disease", "")
+    dx = _dx([(1, *CS, 10), (1, *HF, 10), (1, *pe, 3000),
+              (2, *valve, 10), (2, *HF, 10)])
+    kept, report = select_hfcs_cohort(_patient([1, 2]), dx, window_minutes=1440)
+    assert kept["patientunitstayid"].tolist() == [2]
+    assert report["excluded_cs_non_hf_cause"] == 1

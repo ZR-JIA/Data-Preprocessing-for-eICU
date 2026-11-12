@@ -36,7 +36,6 @@ tables:
     - "admissionheight"
     - "admissionweight"
     - "hospitaldischargestatus" # required to build the label; dropped afterwards
-    - "unitadmitoffset"
     - "unitdischargeoffset"     # enforces the observation window (EICU-04)
     - "hospitaldischargeyear"   # the only time axis eICU exposes; without it
                                 # the temporal protocol cannot run (EICU-13)

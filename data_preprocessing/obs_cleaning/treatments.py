@@ -31,6 +31,10 @@ INOTROPES = {
     "levosimendan": r"levosimendan",
 }
 MECH_VENT = re.compile(r"mechanical ventilation|\bventilator\b|intubat|endotracheal")
+# eICU files NIV under the same branch, e.g.
+# "pulmonary|ventilation and oxygenation|mechanical ventilation|non-invasive
+# ventilation"; it is not invasive ventilation.
+NON_INVASIVE = re.compile(r"non-?invasive")
 MCS = re.compile(r"balloon pump|\biabp\b|impella|ventricular assist|\bvad\b|ecmo|"
                  r"extracorporeal membrane")
 
@@ -77,7 +81,7 @@ def treatment_flags(stay_ids, window_minutes: int, infusion: pd.DataFrame = None
             vaso |= _agents(t, VASOPRESSORS)
             ino |= _agents(t, INOTROPES)
             low = t.lower()
-            vent = vent or bool(MECH_VENT.search(low))
+            vent = vent or (bool(MECH_VENT.search(low)) and not NON_INVASIVE.search(low))
             mcs = mcs or bool(MCS.search(low))
         out.loc[sid] = [int(bool(vaso)), int(bool(ino)), len(vaso | ino), int(vent), int(mcs)]
     return out

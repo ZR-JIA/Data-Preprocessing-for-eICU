@@ -37,11 +37,27 @@ HF_TEXT_ANY = (
     re.compile(r"\bcongestive\b"),
     re.compile(r"\bcardiomyopathy\b"),
 )
+# eICU strings that mention CHF only to rule it out, e.g.
+# "acute on chronic respiratory failure not due to chf" and
+# "acute respiratory failure due to volume overload without chf".
+HF_TEXT_NEGATED = (
+    re.compile(r"not due to chf"),
+    re.compile(r"without chf"),
+)
 AMI_TEXT_ANY = (
     re.compile(r"myocardial infarction"),
     re.compile(r"\bstemi\b"),
     re.compile(r"\bnstemi\b"),
 )
+
+# Cardiogenic shock attributed to a cause other than heart failure, from the
+# eICU subtype strings ("cardiogenic shock|due to ..."): ischaemia (ACS),
+# obstructive shock (massive PE, tamponade) and post-MI VSD. Excluded at any
+# time in the stay, like AMI. Valvular causes are kept (heart failure of
+# valvular origin). Decided with the study author on 2026-11-12.
+CS_NON_HF_ETIOLOGY = re.compile(
+    r"cardiogenic shock\|due to (myocardial ischemia|massive pulmonary embolus|"
+    r"pericardial tamponade|ventricular septal defect)")
 
 # APACHE admission diagnosis paths mark surgical admissions with "|Operative|".
 OPERATIVE_PATH = re.compile(r"\|operative\|")
@@ -63,6 +79,11 @@ def _text_all(text, patterns) -> bool:
 
 def _text_any(text, patterns) -> bool:
     return isinstance(text, str) and any(p.search(text.lower()) for p in patterns)
+
+
+def _hf_text(text) -> bool:
+    """Heart-failure evidence in free text, ignoring strings that negate CHF."""
+    return _text_any(text, HF_TEXT_ANY) and not _text_any(text, HF_TEXT_NEGATED)
 
 
 def _stays(df: pd.DataFrame, mask: pd.Series) -> set:
@@ -127,7 +148,7 @@ def select_hfcs_cohort(
     cs = _stays(diag_win, diag_win["icd9code"].apply(_code_hit, args=(CS_CODE_PREFIXES,))
                 | diag_win["diagnosisstring"].apply(_text_all, args=(CS_TEXT_ALL,)))
     hf = _stays(diag_win, diag_win["icd9code"].apply(_code_hit, args=(HF_CODE_PREFIXES,))
-                | diag_win["diagnosisstring"].apply(_text_any, args=(HF_TEXT_ANY,)))
+                | diag_win["diagnosisstring"].apply(_hf_text))
     ami = _stays(diag_all, diag_all["icd9code"].apply(_code_hit, args=(AMI_CODE_PREFIXES,))
                  | diag_all["diagnosisstring"].apply(_text_any, args=(AMI_TEXT_ANY,)))
 
@@ -142,7 +163,7 @@ def select_hfcs_cohort(
     if admissiondx is not None and not admissiondx.empty:
         path = admissiondx["admitdxpath"]
         cs_adx = _stays(admissiondx, path.apply(_text_all, args=(CS_TEXT_ALL,)))
-        hf_adx = _stays(admissiondx, path.apply(_text_any, args=(HF_TEXT_ANY,)))
+        hf_adx = _stays(admissiondx, path.apply(_hf_text))
         operative = _stays(admissiondx, path.apply(
             lambda t: isinstance(t, str) and bool(OPERATIVE_PATH.search(t.lower()))))
         report["cs_added_by_admissiondx"] = len(cs_adx - cs)
@@ -152,7 +173,7 @@ def select_hfcs_cohort(
 
     if pasthistory is not None and not pasthistory.empty:
         hf_hist = _stays(pasthistory, pasthistory["pasthistorypath"].apply(
-            _text_any, args=(HF_TEXT_ANY,)))
+            _hf_text))
         report["hf_added_by_pasthistory"] = len(hf_hist - hf)
         hf |= hf_hist
 
@@ -161,6 +182,10 @@ def select_hfcs_cohort(
     report["cs_and_hf"] = len(both)
     report["excluded_ami"] = len(both & ami)
     selected = both - ami
+    other_cause = _stays(diag_all, diag_all["diagnosisstring"].apply(
+        lambda t: isinstance(t, str) and bool(CS_NON_HF_ETIOLOGY.search(t.lower()))))
+    report["excluded_cs_non_hf_cause"] = len(selected & other_cause)
+    selected -= other_cause
     if exclude_operative:
         report["excluded_operative_admission"] = len(selected & operative)
         selected -= operative
