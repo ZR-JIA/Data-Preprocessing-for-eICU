@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 """
-Simple data cleaning pipeline for stroke patients.
+Data cleaning pipeline for eICU mortality cohorts.
 7 steps: load -> cohort -> timealign -> outliers -> aggregate -> impute -> save
+
+The cohort is chosen by the `cohort` key of the config:
+    stroke  (default) the published stroke cohort, unchanged
+    hf_cs   heart failure-related cardiogenic shock (obs_cleaning/cohort_hfcs.py)
 """
 import argparse
+import json
 import yaml
 from pathlib import Path
+
+import pandas as pd
+
 from obs_cleaning import (
     load_data,
+    load_extra_tables,
+    select_hfcs_cohort,
+    filter_adults,
+    keep_first_stay,
+    apache_iv_prediction,
+    treatment_flags,
     select_cohort,
     align_time_window,
     apply_outlier_nan,
@@ -76,6 +90,10 @@ def main():
         lab_outlier_limits = {k: tuple(v)
                               for k, v in cfg["qc"].get("lab_outlier_limits", {}).items()}
         tables = cfg.get("tables")
+        cohort_name = cfg.get("cohort", "stroke")
+        hfcs_cfg = cfg.get("hf_cs", {})
+        vital_stats = cfg.get("features", {}).get("vital_stats")
+        lab_stats = cfg.get("features", {}).get("lab_stats")
         if not tables:
             raise ValueError(
                 f"{args.config}: missing the 'tables' block. It declares which "
@@ -92,14 +110,25 @@ def main():
         outlier_limits = dict(DEFAULT_OUTLIER_LIMITS)
         lab_outlier_limits = {}
         tables = DEFAULT_TABLES
+        cohort_name, hfcs_cfg, vital_stats, lab_stats = "stroke", {}, None, None
+
+    if cohort_name not in ("stroke", "hf_cs"):
+        raise ValueError(f"Unknown cohort '{cohort_name}'; expected 'stroke' or 'hf_cs'")
+    flow = {"cohort": cohort_name, "time_window_hours": time_window}
 
     print("=" * 60)
-    print("STROKE DATA CLEANING PIPELINE")
+    print(f"DATA CLEANING PIPELINE - cohort: {cohort_name}")
     print("=" * 60)
 
     # Step 1: Load data
     print("\n[1/7] Loading data...")
     patient, diagnosis, vital, lab = load_data(input_dir, tables=tables)
+    extra = {}
+    if cohort_name == "hf_cs":
+        wanted = ["admissionDx", "pastHistory", "vitalAperiodic", "infusionDrug",
+                  "treatment", "apachePatientResult"]
+        extra = load_extra_tables(input_dir, tables, [t for t in wanted if t in tables])
+        print("  Extra tables: " + ", ".join(f"{k} {v.shape}" for k, v in extra.items()))
     print(f"  Patient: {patient.shape}, Diagnosis: {diagnosis.shape}")
     if 'hospitalid' in patient.columns:
         print(f"  Found real hospital IDs: {patient['hospitalid'].nunique()} distinct hospitals")
@@ -109,26 +138,54 @@ def main():
     print(f"  Vital: {vital.shape}, Lab: {lab.shape}")
 
     # Step 2: Cohort selection
-    print("\n[2/7] Selecting stroke cohort...")
+    print(f"\n[2/7] Selecting {cohort_name} cohort...")
     window_minutes = time_window * 60
-    cohort_pat, cohort_report = select_cohort(patient, diagnosis, window_minutes)
-    print(f"  Diagnoses considered:   {cohort_report['diagnoses_total']}")
-    if "diagnoses_within_window" in cohort_report:
-        print(f"  Within the window:      {cohort_report['diagnoses_within_window']}")
-    print(f"  Stays by ICD-9:         {cohort_report['by_icd9']}")
-    print(f"  Stays by keyword only:  {cohort_report['by_keyword_only']}")
-    print(f"  Stroke stays selected:  {cohort_report['stays_selected']}")
+    flow["stays_in_database"] = len(patient)
+    if cohort_name == "stroke":
+        cohort_pat, cohort_report = select_cohort(patient, diagnosis, window_minutes)
+        print(f"  Diagnoses considered:   {cohort_report['diagnoses_total']}")
+        if "diagnoses_within_window" in cohort_report:
+            print(f"  Within the window:      {cohort_report['diagnoses_within_window']}")
+        print(f"  Stays by ICD-9:         {cohort_report['by_icd9']}")
+        print(f"  Stays by keyword only:  {cohort_report['by_keyword_only']}")
+        print(f"  Stroke stays selected:  {cohort_report['stays_selected']}")
+    else:
+        adults, adult_report = filter_adults(patient, hfcs_cfg.get("min_age", 18))
+        flow["adult_filter"] = adult_report
+        print(f"  Adults (age >= {hfcs_cfg.get('min_age', 18)}): {adult_report['stays_after']}")
+        cohort_pat, cohort_report = select_hfcs_cohort(
+            adults, diagnosis, window_minutes,
+            admissiondx=extra.get("admissionDx"),
+            pasthistory=extra.get("pastHistory"),
+            exclude_operative=hfcs_cfg.get("exclude_operative_admissions", True),
+        )
+        for k, v in cohort_report.items():
+            print(f"  {k}: {v}")
+    flow["cohort_selection"] = cohort_report
 
     # Require the stay to span the observation window, so the length of the
     # record is not itself a predictor of the outcome.
     cohort_pat, window_report = apply_observation_window(cohort_pat, window_minutes)
+    flow["observation_window"] = window_report
     print(f"  Shorter than {time_window}h, dropped: {window_report['stays_shorter_than_window']}")
     print(f"  Stays remaining:        {window_report['stays_after']}")
 
+    if cohort_name == "hf_cs":
+        # One stay per person: the earliest eligible one.
+        cohort_pat, first_report = keep_first_stay(cohort_pat)
+        flow["first_stay"] = first_report
+        print(f"  Repeat stays dropped:   {first_report['repeat_stays_dropped']}")
+
     keep_ids = set(cohort_pat["patientunitstayid"].unique())
-    
+
     vital = vital[vital["patientunitstayid"].isin(keep_ids)].copy()
     lab = lab[lab["patientunitstayid"].isin(keep_ids)].copy()
+    if "vitalAperiodic" in extra:
+        # Cuff blood pressure lives in vitalAperiodic; stack it under the
+        # periodic vitals so it is aligned, cleaned and aggregated the same way.
+        aper = extra["vitalAperiodic"]
+        aper = aper[aper["patientunitstayid"].isin(keep_ids)]
+        vital = pd.concat([vital, aper], ignore_index=True, sort=False)
 
     # Step 3: Time alignment
     print(f"\n[3/7] Aligning time window (first {time_window} hours)...")
@@ -155,10 +212,22 @@ def main():
 
     # Step 5: Feature aggregation
     print("\n[5/7] Aggregating features...")
-    agg_v = aggregate_vitals(vital)
-    agg_l = aggregate_labs(lab) if not lab.empty else None
-    
+    agg_v = aggregate_vitals(vital, stats=vital_stats)
+    agg_l = aggregate_labs(lab, stats=lab_stats) if not lab.empty else None
+
     agg = agg_v if agg_l is None else agg_v.join(agg_l, how="left")
+
+    if cohort_name == "hf_cs":
+        flags = treatment_flags(keep_ids, window_minutes,
+                                infusion=extra.get("infusionDrug"),
+                                treatment=extra.get("treatment"))
+        agg = agg.join(flags, how="outer").fillna({c: 0 for c in flags.columns})
+        print("  Treatment exposure (stays): "
+              + ", ".join(f"{c}={int((flags[c] > 0).sum())}" for c in flags.columns))
+        if "apachePatientResult" in extra:
+            # Baseline only: run_obs_trainReady.py keeps it out of the features.
+            agg = agg.join(apache_iv_prediction(extra["apachePatientResult"]), how="left")
+            flow["apache_iv_available"] = int(agg["apache_iv_pred"].notna().sum())
     print(f"  Aggregated features: {agg.shape[1]} columns")
 
    # =========================================================================
@@ -228,6 +297,18 @@ def main():
     cleaned_reset = cleaned.reset_index()
     save_data(cleaned_reset, output_file)
     print(f"  Saved {cleaned_reset.shape[0]} patients, {cleaned_reset.shape[1]} features")
+
+    # Participant flow for the paper (TRIPOD+AI asks for one).
+    flow["final"] = {
+        "stays": int(cleaned_reset.shape[0]),
+        "deaths": int(cleaned_reset["mortality"].sum()),
+        "columns": int(cleaned_reset.shape[1]),
+        "dropped_sparse_columns": report["dropped_cols"],
+    }
+    flow_path = Path(output_file).with_name(Path(output_file).stem + "_flow.json")
+    with open(flow_path, "w") as f:
+        json.dump(flow, f, indent=2, default=str)
+    print(f"  Cohort flow written to {flow_path}")
 
     print("\n" + "=" * 60)
     print("DONE")

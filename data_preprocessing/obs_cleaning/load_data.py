@@ -15,6 +15,9 @@ def _read_table(data_dir: Path, name: str, columns=None) -> pd.DataFrame:
     key `vitalperiodicid`) to reach feature aggregation -- see AUDIT.md EICU-01.
     """
     path = data_dir / f"{name}.csv"
+    if not path.exists() and (data_dir / f"{name}.csv.gz").exists():
+        # PhysioNet distributes eICU as .csv.gz; pandas reads it directly.
+        path = data_dir / f"{name}.csv.gz"
     if columns is None:
         return pd.read_csv(path)
 
@@ -49,3 +52,25 @@ def load_data(data_dir, tables=None):
         _read_table(data_dir, name, tables.get(name))
         for name in _EXPECTED_TABLES
     )
+
+
+def load_extra_tables(data_dir, tables, names):
+    """
+    Load additional eICU tables by name, with the same strict whitelist.
+
+    Only tables that are both requested in `names` and declared in the
+    `tables` block are read; requesting an undeclared table raises, so a
+    cohort definition cannot silently run without the table it relies on.
+
+    Returns:
+        {table_name: DataFrame}
+    """
+    data_dir = Path(data_dir)
+    tables = tables or {}
+    undeclared = [n for n in names if n not in tables]
+    if undeclared:
+        raise KeyError(
+            f"Tables requested but not declared in the config 'tables' block: "
+            f"{undeclared}"
+        )
+    return {name: _read_table(data_dir, name, tables[name]) for name in names}

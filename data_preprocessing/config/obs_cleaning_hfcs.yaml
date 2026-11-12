@@ -1,0 +1,154 @@
+# config/obs_cleaning_hfcs.yaml
+# Heart failure-related cardiogenic shock (HF-CS) cohort, 24-hour window.
+# Derived from obs_cleaning.yaml; the stroke config is left unchanged.
+# Run from data_preprocessing/:
+#   python run_obs_clean.py --config config/obs_cleaning_hfcs.yaml
+paths:
+  input_raw: "../Input/Observative"
+  output_clean: "../outputs/hfcs/obs_cleaned.csv"
+  log_dir: "../logs"
+
+cohort: hf_cs
+time_window_hours: 24
+
+hf_cs:
+  min_age: 18
+  exclude_operative_admissions: true   # keep post-cardiotomy shock out
+
+features:
+  vital_stats: ["mean", "std", "min", "max"]   # plus slope
+  lab_stats: ["mean", "min", "max"]
+
+# Column whitelist. This block is now ENFORCED by load_data(): a column listed
+# here but absent from the CSV raises, and a column present in the CSV but not
+# listed here is never read. Previously this block was inert -- load_data read
+# every column, which is how the vitalPeriodic primary key reached feature
+# aggregation (AUDIT.md EICU-01) and how the whitelist silently diverged from
+# what the published run actually used (AUDIT.md EICU-05).
+tables:
+  patient:
+    - "patientunitstayid"       # one ICU stay
+    - "uniquepid"               # the PERSON; required for patient-level splits
+    - "age"
+    - "gender"
+    - "ethnicity"
+    - "hospitalid"              # renamed to site_id in stage 1
+    - "admissionheight"
+    - "admissionweight"
+    - "hospitaldischargestatus" # required to build the label; dropped afterwards
+    - "unitadmitoffset"
+    - "unitdischargeoffset"     # enforces the observation window (EICU-04)
+    - "hospitaldischargeyear"   # the only time axis eICU exposes; without it
+                                # the temporal protocol cannot run (EICU-13)
+    - "patienthealthsystemstayid"  # orders stays for keep_first_stay()
+    - "unitvisitnumber"
+
+  diagnosis:
+    - "patientunitstayid"
+    - "icd9code"
+    - "diagnosisstring"
+    - "diagnosisoffset"         # a stroke recorded on day 9 cannot define a
+                                # cohort whose features stop at hour 72
+
+  # eICU column names, verified against https://eicu.mit.edu/eicutables/vitalperiodic/
+  # "map" and "spo2" DO NOT EXIST in this table; the real names are
+  # "systemicmean" and "sao2". The old whitelist used the wrong names, and
+  # apply_outlier_nan() skips unknown columns silently, so those two limits
+  # never fired (AUDIT.md EICU-06).
+  # vitalperiodicid is deliberately EXCLUDED: it is a database row identifier,
+  # not a physiological measurement (AUDIT.md EICU-01).
+  vitalPeriodic:
+    - "patientunitstayid"
+    - "observationoffset"
+    - "heartrate"
+    - "respiration"
+    - "sao2"
+    - "temperature"
+    - "systemicsystolic"
+    - "systemicdiastolic"
+    - "systemicmean"
+
+  lab:
+    - "patientunitstayid"
+    - "labname"
+    - "labresult"
+    - "labresultoffset"
+    - "labmeasurenamesystem"    # the unit; labname alone is hospital-specific
+
+  # --- HF-CS additions ---------------------------------------------------
+  vitalAperiodic:               # cuff blood pressure (MAP when no arterial line)
+    - "patientunitstayid"
+    - "observationoffset"
+    - "noninvasivemean"
+
+  admissionDx:                  # APACHE admission diagnosis (cohort + operative flag)
+    - "patientunitstayid"
+    - "admitdxpath"
+
+  pastHistory:                  # documented heart failure history
+    - "patientunitstayid"
+    - "pasthistorypath"
+
+  infusionDrug:                 # vasopressor / inotrope infusions
+    - "patientunitstayid"
+    - "infusionoffset"
+    - "drugname"
+
+  treatment:                    # vasoactives, ventilation, IABP / MCS
+    - "patientunitstayid"
+    - "treatmentoffset"
+    - "treatmentstring"
+
+  apachePatientResult:          # BASELINE ONLY, never a model input
+    - "patientunitstayid"
+    - "apacheversion"
+    - "predictedhospitalmortality"
+
+qc:
+  missing_threshold: 0.7
+  # Keys must match the eICU column names above, otherwise the rule is skipped
+  # without warning.
+  outlier_limits:
+    heartrate: [20, 220]
+    respiration: [4, 60]
+    sao2: [50, 100]
+    temperature: [32, 42]
+    systemicsystolic: [40, 250]
+    systemicdiastolic: [20, 180]
+    systemicmean: [30, 200]
+    noninvasivemean: [30, 200]
+
+  # Labs previously received no range checking at all (AUDIT.md EICU-08). Keys
+  # are matched against labname case-insensitively; analytes not listed here
+  # are left untouched rather than guessed at.
+  lab_outlier_limits:
+    glucose: [10, 2000]
+    "bedside glucose": [10, 2000]
+    sodium: [90, 200]
+    potassium: [1.0, 10.0]
+    chloride: [50, 160]
+    bicarbonate: [5, 60]
+    creatinine: [0.1, 25.0]
+    BUN: [1, 250]
+    calcium: [2.0, 20.0]
+    magnesium: [0.2, 10.0]
+    albumin: [0.5, 7.0]
+    "total bilirubin": [0.0, 60.0]
+    "total cholesterol": [20, 600]
+    lactate: [0.1, 30.0]
+    pH: [6.5, 8.0]
+    Hgb: [2.0, 25.0]
+    Hct: [5, 75]
+    MCHC: [20, 45]
+    MCV: [50, 150]
+    MPV: [4, 20]
+    "WBC x 1000": [0.0, 200.0]
+    "platelets x 1000": [1, 2000]
+    # HF-CS additions
+    "troponin - I": [0.0, 500.0]
+    "troponin - T": [0.0, 100.0]
+    BNP: [0, 70000]
+    "AST (SGOT)": [1, 20000]
+    "ALT (SGPT)": [1, 20000]
+    "PT - INR": [0.5, 20.0]
+    HCO3: [5, 60]

@@ -48,7 +48,10 @@ def _trend_slope(group: pd.DataFrame, value_col: str, time_col: str) -> float:
     return float((t_centred * (y - y.mean())).sum() / denom)
 
 
-def aggregate_vitals(vital: pd.DataFrame, patient_key: str = "patientunitstayid") -> pd.DataFrame:
+def aggregate_vitals(vital: pd.DataFrame, patient_key: str = "patientunitstayid",
+                     stats=None) -> pd.DataFrame:
+    """stats: aggregations besides slope; defaults to VITAL_STATS (mean, std)."""
+    stats = list(stats) if stats else VITAL_STATS
     if vital.empty:
         return pd.DataFrame()
     excluded = NON_PHYSIOLOGICAL | {patient_key}
@@ -58,7 +61,7 @@ def aggregate_vitals(vital: pd.DataFrame, patient_key: str = "patientunitstayid"
         return pd.DataFrame()
 
     # Vitals: mean + std + slope, so instability over the window is visible.
-    agg_funcs = {c: VITAL_STATS for c in value_cols}
+    agg_funcs = {c: stats for c in value_cols}
     base = vital.groupby(patient_key).agg(agg_funcs)
     base.columns = [f"{v}_{s}" for v, s in base.columns]
 
@@ -111,7 +114,10 @@ def harmonise_lab_units(lab: pd.DataFrame, unit_col: str = "labmeasurenamesystem
     return lab[keep].copy(), report
 
 
-def aggregate_labs(lab: pd.DataFrame, patient_key: str = "patientunitstayid") -> pd.DataFrame:
+def aggregate_labs(lab: pd.DataFrame, patient_key: str = "patientunitstayid",
+                   stats=None) -> pd.DataFrame:
+    """stats: aggregations per analyte; defaults to LAB_STATS (mean, std)."""
+    stats = list(stats) if stats else LAB_STATS
     if lab.empty:
         return pd.DataFrame()
     lab_w = lab.pivot_table(index=[patient_key, "labresultoffset"], columns="labname",
@@ -123,7 +129,7 @@ def aggregate_labs(lab: pd.DataFrame, patient_key: str = "patientunitstayid") ->
         return pd.DataFrame()
 
     # Labs: mean + std only; single outlying draws should not dominate.
-    agg_funcs = {c: LAB_STATS for c in value_cols}
+    agg_funcs = {c: stats for c in value_cols}
     base = lab_w.groupby(patient_key).agg(agg_funcs)
     base.columns = [f"lab_{v}_{s}" for v, s in base.columns]
 

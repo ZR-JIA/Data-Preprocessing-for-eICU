@@ -1,5 +1,8 @@
-from .load_data import load_data
+from .load_data import load_data, load_extra_tables
 from .cohort import select_cohort, extract_mortality_label, apply_observation_window
+from .cohort_hfcs import (select_hfcs_cohort, filter_adults, keep_first_stay,
+                          apache_iv_prediction)
+from .treatments import treatment_flags
 from .timealign import align_time_window
 from .outliers import apply_outlier_nan, apply_lab_outlier_nan
 from .aggregate import aggregate_vitals, aggregate_labs, harmonise_lab_units
@@ -8,6 +11,12 @@ from .save_data import save_data
 
 __all__ = [
     "load_data",
+    "load_extra_tables",
+    "select_hfcs_cohort",
+    "filter_adults",
+    "keep_first_stay",
+    "apache_iv_prediction",
+    "treatment_flags",
     "select_cohort",
     "extract_mortality_label",
     "apply_observation_window",

@@ -126,20 +126,32 @@ class ObsTrainReadyPipeline:
         target_col = 'mortality'
         exclude_cols = ['patient_id', 'patientunitstayid', 'uniquepid',
                         'site_id', 'admission_time', '_group_key', target_col]
-        
+        # Config-driven additions: columns that must never be features
+        # (e.g. hospitaldischargeyear) and baselines exported on the side
+        # (e.g. apache_iv_pred), which would otherwise leak a score into X.
+        exclude_cols += list(self.config.get('extra_exclude_cols', []))
+        exclude_cols += list(self.config.get('baseline_cols', []))
+
         # 1. Left tower: categorical features, encoded to 0, 1, 2 ... indices.
         # The paper's left tower has three: Age (16-d), Gender (2-d) and
         # Ethnicity (4-d), concatenated to h_cat in R^22. site_id used to be a
         # fourth, which cannot produce 22 dimensions, so it is no longer a
         # model feature -- it stays on the frame only so the site protocol can
         # split on it (AUDIT.md EICU-10).
-        cat_cols = ['age', 'gender', 'ethnicity']
+        # A config may override this; the DualTower-FT training repository
+        # reads age as numeric and embeds gender, ethnicity and site_id.
+        cat_cols = list(self.config.get('cat_cols', ['age', 'gender', 'ethnicity']))
         # Keep only the ones that exist
         cat_cols = [c for c in cat_cols if c in train_df.columns]
+        exclude_cols = [c for c in exclude_cols if c not in cat_cols]
         
         # 2. Right tower: everything that is not an ID, the label, or categorical
         all_cols = train_df.columns.tolist()
         num_cols = [c for c in all_cols if c not in exclude_cols + cat_cols]
+        # Numeric columns placed before the categorical block, so positional
+        # indices match the training repository (age = feature 0).
+        leading = [c for c in self.config.get('leading_num_cols', []) if c in num_cols]
+        num_cols = leading + [c for c in num_cols if c not in leading]
         
         logger.info(f"Feature split: left tower (cat)={len(cat_cols)}, right tower (num)={len(num_cols)}")
         
@@ -203,9 +215,10 @@ class ObsTrainReadyPipeline:
             y = original_df[target_col].reset_index(drop=True)
             # Keep patient_id for traceability
             pids = original_df['patient_id'].reset_index(drop=True)
-            
-            # Join side by side
-            return pd.concat([pids, y, x_cat, x_num], axis=1)
+
+            # Join side by side: [id, label, leading numeric, categorical, numeric]
+            return pd.concat([pids, y, x_num[leading], x_cat,
+                              x_num.drop(columns=leading)], axis=1)
 
         train_pack = merge_pack(X_train_cat, X_train_num, train_df)
         val_pack = merge_pack(X_val_cat, X_val_num, val_df)
@@ -225,7 +238,12 @@ class ObsTrainReadyPipeline:
         
         # 1. Split
         if protocol_name == 'patient_level':
-            splitter = PatientLevelSplitter(stratify_col='mortality', random_state=seed)
+            sizes = self.config.get('split_sizes', {})
+            splitter = PatientLevelSplitter(
+                train_size=sizes.get('train', 0.7),
+                val_size=sizes.get('val', 0.1),
+                test_size=sizes.get('test', 0.2),
+                stratify_col='mortality', random_state=seed)
         elif protocol_name == 'temporal':
              # Only possible when a time axis survived stage 1
              if 'hospitaldischargeyear' not in df.columns:
@@ -264,6 +282,16 @@ class ObsTrainReadyPipeline:
         # Without these the run cannot be reproduced from what it writes
         # (AUDIT.md EICU-14).
         self.exporter.save_fitted_transforms(protocol_std, seed, self._fitted)
+
+        # Baseline scores (e.g. APACHE IV) are written beside each pack, keyed
+        # by patient_id, so evaluation can use them without them entering X.
+        baseline_cols = [c for c in self.config.get('baseline_cols', [])
+                         if c in splits['train'].columns]
+        if baseline_cols:
+            pack_dir = self.exporter._protocol_dir("PACKS", protocol_std, seed)
+            for name, part in splits.items():
+                part[['patient_id', 'mortality'] + baseline_cols].to_csv(
+                    pack_dir / f"baseline_{name}.csv", index=False)
         self.exporter.save_feature_list(
             feature_names=self._fitted['cat_cols'] + self._fitted['num_cols'],
             feature_types={'numeric': self._fitted['num_cols'],
@@ -282,17 +310,20 @@ class ObsTrainReadyPipeline:
         # The paper reports results averaged over 5 random seeds, but run()
         # used to hardcode seed=42 and produce exactly one split, so n_seeds
         # had no effect (AUDIT.md EICU-14). Every configured seed now runs.
+        # Small cohorts may restrict this, e.g. protocols: [patient_level].
+        protocols = self.config.get('protocols', ['patient_level', 'site', 'temporal'])
         for seed in seeds:
             # 1. Patient level (the primary protocol)
-            self.run_protocol('patient_level', df, seed=seed)
+            if 'patient_level' in protocols:
+                self.run_protocol('patient_level', df, seed=seed)
 
             # 2. Site split: cross-hospital generalisation
-            if df['site_id'].nunique() > 1:
+            if 'site' in protocols and df['site_id'].nunique() > 1:
                 self.run_protocol('site', df, seed=seed)
 
             # 3. Temporal split: only possible when a time axis survived
             # stage 1. eICU exposes hospitaldischargeyear and nothing finer.
-            if 'hospitaldischargeyear' in df.columns:
+            if 'temporal' in protocols and 'hospitaldischargeyear' in df.columns:
                 self.run_protocol('temporal', df, seed=seed)
 
         self.exporter.save_seeds(seeds)
