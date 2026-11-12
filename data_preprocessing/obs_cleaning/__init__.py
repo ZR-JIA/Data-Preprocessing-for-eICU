@@ -1,4 +1,4 @@
-from .load_data import load_data, load_extra_tables
+from .load_data import load_data, load_extra_tables, load_table_for_stays
 from .cohort import select_cohort, extract_mortality_label, apply_observation_window
 from .cohort_hfcs import (select_hfcs_cohort, filter_adults, keep_first_stay,
                           apache_iv_prediction)
@@ -12,6 +12,7 @@ from .save_data import save_data
 __all__ = [
     "load_data",
     "load_extra_tables",
+    "load_table_for_stays",
     "select_hfcs_cohort",
     "filter_adults",
     "keep_first_stay",

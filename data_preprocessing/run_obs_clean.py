@@ -17,6 +17,7 @@ import pandas as pd
 from obs_cleaning import (
     load_data,
     load_extra_tables,
+    load_table_for_stays,
     select_hfcs_cohort,
     filter_adults,
     keep_first_stay,
@@ -122,20 +123,27 @@ def main():
 
     # Step 1: Load data
     print("\n[1/7] Loading data...")
-    patient, diagnosis, vital, lab = load_data(input_dir, tables=tables)
     extra = {}
     if cohort_name == "hf_cs":
-        wanted = ["admissionDx", "pastHistory", "vitalAperiodic", "infusionDrug",
-                  "treatment", "apachePatientResult"]
+        # Small tables now; vitals and labs are read in chunks after cohort
+        # selection, keeping only cohort stays (they do not fit in memory whole).
+        small = load_extra_tables(input_dir, tables, ["patient", "diagnosis"])
+        patient, diagnosis = small["patient"], small["diagnosis"]
+        vital = lab = None
+        wanted = ["admissionDx", "pastHistory", "infusionDrug", "treatment",
+                  "apachePatientResult"]
         extra = load_extra_tables(input_dir, tables, [t for t in wanted if t in tables])
         print("  Extra tables: " + ", ".join(f"{k} {v.shape}" for k, v in extra.items()))
+    else:
+        patient, diagnosis, vital, lab = load_data(input_dir, tables=tables)
     print(f"  Patient: {patient.shape}, Diagnosis: {diagnosis.shape}")
     if 'hospitalid' in patient.columns:
         print(f"  Found real hospital IDs: {patient['hospitalid'].nunique()} distinct hospitals")
         patient = patient.rename(columns={'hospitalid': 'site_id'})
     else:
         raise ValueError("CRITICAL: no 'hospitalid' column in the raw data; check patient.csv")
-    print(f"  Vital: {vital.shape}, Lab: {lab.shape}")
+    if vital is not None:
+        print(f"  Vital: {vital.shape}, Lab: {lab.shape}")
 
     # Step 2: Cohort selection
     print(f"\n[2/7] Selecting {cohort_name} cohort...")
@@ -178,14 +186,23 @@ def main():
 
     keep_ids = set(cohort_pat["patientunitstayid"].unique())
 
-    vital = vital[vital["patientunitstayid"].isin(keep_ids)].copy()
-    lab = lab[lab["patientunitstayid"].isin(keep_ids)].copy()
-    if "vitalAperiodic" in extra:
-        # Cuff blood pressure lives in vitalAperiodic; stack it under the
-        # periodic vitals so it is aligned, cleaned and aggregated the same way.
-        aper = extra["vitalAperiodic"]
-        aper = aper[aper["patientunitstayid"].isin(keep_ids)]
-        vital = pd.concat([vital, aper], ignore_index=True, sort=False)
+    if cohort_name == "hf_cs":
+        print("  Reading vitals and labs for the cohort (chunked)...")
+        vital = load_table_for_stays(input_dir, "vitalPeriodic", tables["vitalPeriodic"],
+                                     keep_ids, "observationoffset", window_minutes)
+        lab = load_table_for_stays(input_dir, "lab", tables["lab"],
+                                   keep_ids, "labresultoffset", window_minutes)
+        if "vitalAperiodic" in tables:
+            # Cuff blood pressure lives in vitalAperiodic; stack it under the
+            # periodic vitals so it is aligned, cleaned and aggregated the same way.
+            aper = load_table_for_stays(input_dir, "vitalAperiodic",
+                                        tables["vitalAperiodic"], keep_ids,
+                                        "observationoffset", window_minutes)
+            vital = pd.concat([vital, aper], ignore_index=True, sort=False)
+        print(f"  Vital: {vital.shape}, Lab: {lab.shape}")
+    else:
+        vital = vital[vital["patientunitstayid"].isin(keep_ids)].copy()
+        lab = lab[lab["patientunitstayid"].isin(keep_ids)].copy()
 
     # Step 3: Time alignment
     print(f"\n[3/7] Aligning time window (first {time_window} hours)...")

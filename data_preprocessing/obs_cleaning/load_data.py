@@ -54,6 +54,39 @@ def load_data(data_dir, tables=None):
     )
 
 
+def load_table_for_stays(data_dir, name, columns, stay_ids, offset_col=None,
+                         max_offset=None, chunksize=2_000_000):
+    """
+    Read a large table in chunks, keeping only rows of `stay_ids`.
+
+    vitalPeriodic holds about 146 million rows; reading it whole needs more
+    memory than a 16 GB machine has. Filtering each chunk to the cohort keeps
+    the result small. When `offset_col` is given, rows outside
+    [0, max_offset] are dropped too -- exactly the range align_time_window()
+    keeps afterwards, so the output is unchanged, only cheaper.
+    """
+    data_dir = Path(data_dir)
+    path = data_dir / f"{name}.csv"
+    if not path.exists() and (data_dir / f"{name}.csv.gz").exists():
+        path = data_dir / f"{name}.csv.gz"
+    header = pd.read_csv(path, nrows=0).columns
+    missing = [c for c in columns if c not in header]
+    if missing:
+        raise KeyError(f"{path.name}: columns declared in config but not present: {missing}")
+
+    keep = set(stay_ids)
+    parts = []
+    for chunk in pd.read_csv(path, usecols=columns, chunksize=chunksize):
+        mask = chunk["patientunitstayid"].isin(keep)
+        if offset_col is not None:
+            mask &= chunk[offset_col].between(0, max_offset)
+        if mask.any():
+            parts.append(chunk[mask])
+    if not parts:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(parts, ignore_index=True)
+
+
 def load_extra_tables(data_dir, tables, names):
     """
     Load additional eICU tables by name, with the same strict whitelist.

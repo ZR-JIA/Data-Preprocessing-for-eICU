@@ -116,3 +116,16 @@ def test_epinephrine_pattern_does_not_match_norepinephrine():
                         "drugname": ["Norepinephrine (mcg/min)"]})
     f = treatment_flags([1], 1440, infusion=inf)
     assert f.loc[1, "n_vasoactive_24h"] == 1
+
+
+def test_chunked_loader_matches_full_filter(tmp_path):
+    from obs_cleaning.load_data import load_table_for_stays
+    df = pd.DataFrame({"patientunitstayid": np.repeat([1, 2, 3], 5),
+                       "observationoffset": np.tile([-10, 0, 700, 1440, 2000], 3),
+                       "heartrate": np.arange(15, dtype=float)})
+    df.to_csv(tmp_path / "vitalPeriodic.csv.gz", index=False)
+    got = load_table_for_stays(tmp_path, "vitalPeriodic", list(df.columns), {1, 3},
+                               "observationoffset", 1440, chunksize=4)
+    want = df[df["patientunitstayid"].isin({1, 3})
+              & df["observationoffset"].between(0, 1440)].reset_index(drop=True)
+    pd.testing.assert_frame_equal(got, want)
