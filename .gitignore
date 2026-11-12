@@ -2,6 +2,7 @@
 Input/
 outputs/
 train_ready/
+train_ready_hfcs/
 
 # Python
 __pycache__/
