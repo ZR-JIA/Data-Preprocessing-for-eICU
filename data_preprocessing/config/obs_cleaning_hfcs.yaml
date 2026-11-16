@@ -46,8 +46,8 @@ tables:
     - "patientunitstayid"
     - "icd9code"
     - "diagnosisstring"
-    - "diagnosisoffset"         # a stroke recorded on day 9 cannot define a
-                                # cohort whose features stop at hour 72
+    - "diagnosisoffset"         # a diagnosis recorded on day 9 cannot define
+                                # a cohort whose features stop at hour 24
 
   # eICU column names, verified against https://eicu.mit.edu/eicutables/vitalperiodic/
   # "map" and "spo2" DO NOT EXIST in this table; the real names are
